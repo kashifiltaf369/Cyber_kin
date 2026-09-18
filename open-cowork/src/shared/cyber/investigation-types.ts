@@ -55,7 +55,7 @@ export interface OperationalRationale {
 
 export function isOperationalRationale(value: unknown): value is OperationalRationale {
   if (!value || typeof value !== 'object') return false;
-  const candidate = value as Record<string, unknown>;
+  const candidate = value as unknown as Record<string, unknown>;
   return typeof candidate.what === 'string'
     && typeof candidate.why === 'string'
     && typeof candidate.expectedValue === 'string'
@@ -64,14 +64,22 @@ export function isOperationalRationale(value: unknown): value is OperationalRati
 }
 
 export function toOperationalRationale(value: unknown): OperationalRationale | null {
+  // isOperationalRationale has already verified every field's type; the cast
+  // only recovers the checked shape for property access.
   if (!isOperationalRationale(value)) return null;
-  const candidate = value as Record<string, unknown>;
+  const candidate = value as unknown as {
+    what: string;
+    why: string;
+    expectedValue: string;
+    result?: string;
+    next?: string;
+  };
   return {
     what: candidate.what,
     why: candidate.why,
     expectedValue: candidate.expectedValue,
-    result: candidate.result as string | undefined,
-    next: candidate.next as string | undefined,
+    result: candidate.result,
+    next: candidate.next,
   };
 }
 
@@ -238,6 +246,8 @@ export interface InvestigationTask {
   updatedAt: number;
   owner?: string;
   priority?: number;
+  /** Identifier of the planned task this runtime task was created from (set by the parallel engine). */
+  plannedTaskId?: string;
 }
 
 export interface InvestigationDecision {
@@ -377,4 +387,76 @@ export interface AddHumanContextInput {
     type: InvestigationEntity['type'];
     summary?: string;
   }>;
+}
+
+// ---------------------------------------------------------------------------
+// Human interruption (UI → IPC → RuntimeInvestigationOrchestrator)
+// ---------------------------------------------------------------------------
+
+/**
+ * Simple one-shot interruption actions emitted by the workspace UI
+ * (HumanCommandBar / HumanContextPanel / HypothesesPanel). Each kind carries
+ * its payload in `value` / `title`+`statement` / `hypothesisId`.
+ */
+export type HumanInterruptionKind =
+  | 'directive'
+  | 'direction'
+  | 'note'
+  | 'suspicion'
+  | 'constraint'
+  | 'hypothesis'
+  | 'promote_hypothesis'
+  | 'reject_hypothesis'
+  | 'risk_tolerance'
+  | 'reject_replan';
+
+export interface HumanInterruptionTaskSpec {
+  id: string;
+  title: string;
+  description: string;
+  role: string;
+  kind: 'investigative' | 'analysis' | 'challenge' | 'research';
+  dependsOn?: string[];
+  canRunConcurrently?: boolean;
+  mergeStrategy: 'append_evidence' | 'update_hypothesis' | 'append_questions' | 'append_notes';
+}
+
+export interface HumanInterruptionHypothesisUpdate {
+  hypothesisId: string;
+  confidence?: number;
+  status?: 'OPEN' | 'SUPPORTED' | 'WEAKENED' | 'REJECTED';
+  statement?: string;
+  title?: string;
+}
+
+/**
+ * Canonical payload for `investigation.applyHumanInterruption`.
+ *
+ * Either a free-form batch interruption (`instruction` + task/evidence
+ * directives) or a single `kind`-based action from the workspace UI.
+ * `instruction` is optional — the orchestrator derives a human-readable
+ * instruction from `kind` + payload when it is absent, and validates the
+ * payload before touching investigation state so malformed IPC input can
+ * never crash a worker or corrupt shared state.
+ */
+export interface ApplyHumanInterruptionInput {
+  investigationId: string;
+  instruction?: string;
+  // Batch interruption fields
+  addContext?: string[];
+  addPriority?: string;
+  redirectInvestigationTo?: string;
+  ignoreEvidenceIds?: string[];
+  pauseTaskIds?: string[];
+  cancelTaskIds?: string[];
+  reprioritize?: Array<{ plannedTaskId: string; priority: number; rationale?: string }>;
+  redirectTasks?: Array<{ plannedTaskId: string; description?: string; role?: string }>;
+  createTasks?: HumanInterruptionTaskSpec[];
+  hypothesisUpdates?: HumanInterruptionHypothesisUpdate[];
+  // Single kind-based action fields
+  kind?: HumanInterruptionKind;
+  value?: string;
+  title?: string;
+  statement?: string;
+  hypothesisId?: string;
 }

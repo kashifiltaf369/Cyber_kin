@@ -38,6 +38,11 @@ const ConfigModal = lazy(() =>
 const SettingsPanel = lazy(() =>
   import('./components/SettingsPanel').then((module) => ({ default: module.SettingsPanel }))
 );
+const InvestigationWorkspace = lazy(() =>
+  import('./components/workspace/InvestigationWorkspace').then((module) => ({
+    default: module.InvestigationWorkspace,
+  }))
+);
 
 function MainPanelFallback() {
   return (
@@ -59,6 +64,7 @@ function ContextPanelFallback() {
 function App() {
   // --- Store state via selectors (each subscription is minimally scoped) ---
   const activeSessionId = useActiveSessionId();
+  const activeView = useAppStore((s) => s.activeView);
   const settings = useSettings();
   const systemDarkMode = useSystemDarkMode();
   const { showSettings } = useSettingsState();
@@ -188,6 +194,16 @@ function App() {
             >
               <Suspense fallback={<MainPanelFallback />}>
                 <SettingsPanel onClose={() => setShowSettings(false)} />
+              </Suspense>
+            </PanelErrorBoundary>
+          ) : activeView === 'investigations' ? (
+            <PanelErrorBoundary
+              name="InvestigationWorkspace"
+              resetKey="investigations"
+              fallback={<MainPanelFallback />}
+            >
+              <Suspense fallback={<MainPanelFallback />}>
+                <InvestigationWorkspace />
               </Suspense>
             </PanelErrorBoundary>
           ) : activeSessionId ? (

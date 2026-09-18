@@ -134,7 +134,7 @@ describe('CyberCapabilityExtension', () => {
       { name: 'inspect_file', input: { filePath } },
       undefined as never,
       undefined as never,
-      { sessionId: 'session-1' }
+      { sessionId: 'session-1', cwd: root }
     );
     const executionText = textFrom(execution as never);
     expect(executionText).toContain('artifact.txt');
@@ -381,7 +381,7 @@ describe('CyberCapabilityExtension', () => {
       { name: 'inspect_file', input: { filePath } },
       undefined as never,
       undefined as never,
-      { sessionId: 'session-audit' }
+      { sessionId: 'session-audit', cwd: root }
     );
 
     const updated = investigationService.get(created.id)!;
@@ -393,5 +393,86 @@ describe('CyberCapabilityExtension', () => {
     });
 
     rmSync(root, { recursive: true, force: true });
+  });
+
+  it('audits failed executions (incl. timeouts) before surfacing the error', async () => {
+    const { db } = makeDb();
+    const investigationService = new InvestigationService(db);
+    const created = investigationService.create({ title: 'Case', objective: 'Timeout behavior' });
+    investigationService.linkSession(created.id, 'session-fail', 'worker');
+
+    const auditTrail = new CyberActionAuditTrail();
+    const registry = new CyberCapabilityRegistry([
+      {
+        name: 'search_dns',
+        description: 'Hanging capability.',
+        inputSchema: { type: 'object', properties: {} },
+        outputSchema: { type: 'object', properties: {} },
+        riskLevel: 'LOW',
+        permissionsRequired: [],
+        timeoutMs: 30,
+        cost: 'LOW',
+        supportedAdapters: [],
+        tags: ['dns'],
+        canAnswer: ['search dns'],
+        executor: async () => {
+          await new Promise((resolve) => setTimeout(resolve, 5000));
+          return { records: [] };
+        },
+      },
+    ]);
+    const extension = new CyberCapabilityExtension(registry, {
+      sessionLookup: (sessionId) => investigationService.getInvestigationIdBySessionId(sessionId),
+      permissionResolver: () => 'allow',
+      auditTrail,
+      onAuditRecord: (record) => {
+        if (!record.investigationId) return;
+        investigationService.recordEvent(
+          record.investigationId,
+          'CYBER_ACTION_AUDITED',
+          record.actor,
+          `Cyber action ${record.result.status}: ${record.capabilityName}`,
+          { capabilityName: record.capabilityName, result: record.result }
+        );
+      },
+    });
+
+    const result = await extension.beforeSessionRun({
+      session: {
+        id: 'session-fail',
+        title: 'Worker',
+        status: 'idle',
+        mountedPaths: [],
+        allowedTools: [],
+        memoryEnabled: false,
+        createdAt: 1,
+        updatedAt: 1,
+      },
+      prompt: 'Trigger a timeout',
+      existingMessages: [],
+      isColdStart: true,
+    });
+    const executeTool = result.customTools?.find((tool) => tool.name === 'cyber_capability_execute');
+
+    await expect(
+      executeTool?.execute(
+        'call-9',
+        { name: 'search_dns', input: {} },
+        undefined as never,
+        undefined as never,
+        { sessionId: 'session-fail' }
+      )
+    ).rejects.toThrow(/timed out/);
+
+    // The failure is durably mirrored into the investigation timeline.
+    const updated = investigationService.get(created.id)!;
+    const failureEvent = updated.activity.find((item) => item.type === 'CYBER_ACTION_AUDITED');
+    expect(failureEvent).toBeDefined();
+    expect((failureEvent?.data as { result?: { status?: string } }).result?.status).toBe('failed');
+
+    // And recorded in the in-memory trail.
+    const failedRecords = auditTrail.list().filter((r) => r.result.status === 'failed');
+    expect(failedRecords).toHaveLength(1);
+    expect(failedRecords[0].capabilityName).toBe('search_dns');
   });
 });

@@ -82,6 +82,16 @@ const ALLOWED_CLIENT_EVENTS: ReadonlySet<string> = new Set<ClientEvent['type']>(
   'investigation.redirectTask',
   'investigation.exportReport',
   'investigation.getReport',
+  'demo.start',
+  'demo.restart',
+  'demo.approve',
+  'demo.deny',
+  'demo.state',
+  'synthetic.listScenarios',
+  'synthetic.status',
+  'synthetic.loadScenario',
+  'synthetic.reset',
+  'synthetic.seedInvestigation',
 ]);
 
 // Invoke a whitelisted ClientEvent and wait for the response. Defined once at
@@ -224,6 +234,34 @@ contextBridge.exposeInMainWorld('electronAPI', {
       investigationId: string
     ): Promise<import('../main/investigation/investigation-report-service').InvestigationReport> =>
       invoke({ type: 'investigation.getReport', payload: { investigationId } }),
+  },
+
+  // KIN Demo Mode — deterministic scenario controller (main process)
+  demo: {
+    start: (): Promise<{ investigationId: string }> => invoke({ type: 'demo.start', payload: {} }),
+    restart: (): Promise<{ investigationId: string }> => invoke({ type: 'demo.restart', payload: {} }),
+    approve: (stepId: string): Promise<{ success: boolean }> => invoke({ type: 'demo.approve', payload: { stepId } }),
+    deny: (stepId: string): Promise<{ success: boolean }> => invoke({ type: 'demo.deny', payload: { stepId } }),
+    getState: (): Promise<import('../shared/cyber/demo-types').DemoControllerState> =>
+      invoke({ type: 'demo.state', payload: {} }),
+  },
+
+  // KIN synthetic demo environment (clearly separated demo mode)
+  synthetic: {
+    status: (): Promise<{
+      available: boolean;
+      status: { loaded: boolean; scenarioId: string | null; loadedAt: number | null; recordCounts: Record<string, number> };
+    }> => invoke({ type: 'synthetic.status', payload: {} }),
+    listScenarios: (): Promise<
+      Array<{ id: string; displayName: string; shortDescription: string; domain: string; difficulty: string }>
+    > => invoke({ type: 'synthetic.listScenarios', payload: {} }),
+    loadScenario: (scenarioId: string): Promise<{ scenarioId: string; objective: string; recordCounts: Record<string, number> }> =>
+      invoke({ type: 'synthetic.loadScenario', payload: { scenarioId } }),
+    reset: (): Promise<{ success: boolean }> => invoke({ type: 'synthetic.reset', payload: {} }),
+    seedInvestigation: (
+      scenarioId: string
+    ): Promise<import('../shared/cyber/investigation-types').Investigation> =>
+      invoke({ type: 'synthetic.seedInvestigation', payload: { scenarioId } }),
   },
 
   // Platform info
@@ -600,6 +638,18 @@ declare global {
         getReport: (
           investigationId: string
         ) => Promise<import('../main/investigation/investigation-report-service').InvestigationReport>;
+      };
+      synthetic: {
+        status: () => Promise<{
+          available: boolean;
+          status: { loaded: boolean; scenarioId: string | null; loadedAt: number | null; recordCounts: Record<string, number> };
+        }>;
+        listScenarios: () => Promise<
+          Array<{ id: string; displayName: string; shortDescription: string; domain: string; difficulty: string }>
+        >;
+        loadScenario: (scenarioId: string) => Promise<{ scenarioId: string; objective: string; recordCounts: Record<string, number> }>;
+        reset: () => Promise<{ success: boolean }>;
+        seedInvestigation: (scenarioId: string) => Promise<import('../shared/cyber/investigation-types').Investigation>;
       };
       platform: NodeJS.Platform;
       getSystemTheme: () => Promise<{ shouldUseDarkColors: boolean }>;

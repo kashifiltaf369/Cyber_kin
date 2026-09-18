@@ -22,6 +22,18 @@ export type InvestigationAgentRole =
   | 'Research Investigator'
   | 'Challenger';
 
+/** Runtime-checkable list of every investigator role (single source of truth). */
+export const INVESTIGATION_AGENT_ROLES: readonly InvestigationAgentRole[] = [
+  'Endpoint Investigator',
+  'Network Investigator',
+  'Identity Investigator',
+  'Threat Intelligence Investigator',
+  'Historical Investigator',
+  'Evidence Analyst',
+  'Research Investigator',
+  'Challenger',
+] as const;
+
 export interface AgentCapabilityDefinition {
   role: InvestigationAgentRole;
   description: string;

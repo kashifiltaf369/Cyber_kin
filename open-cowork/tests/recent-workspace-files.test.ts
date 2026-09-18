@@ -17,10 +17,12 @@ describe('listRecentWorkspaceFiles', () => {
 
   it('returns files created after the given timestamp', async () => {
     const before = Date.now();
-    await new Promise((resolve) => setTimeout(resolve, 5));
 
     const filePath = path.join(rootDir, 'deck.pptx');
     await fs.writeFile(filePath, 'ppt');
+    // Deterministic timestamp well clear of `before` (wall-clock jitter on
+    // virtualized filesystems made raw write-order mtimes flaky).
+    await fs.utimes(filePath, new Date(before + 50), new Date(before + 50));
 
     const files = await listRecentWorkspaceFiles(rootDir, before);
 
@@ -33,7 +35,9 @@ describe('listRecentWorkspaceFiles', () => {
 
     await fs.mkdir(path.join(rootDir, 'node_modules'), { recursive: true });
     await fs.writeFile(path.join(rootDir, 'node_modules', 'ignored.txt'), 'ignore');
-    await fs.writeFile(path.join(rootDir, 'report.html'), 'ok');
+    const reportPath = path.join(rootDir, 'report.html');
+    await fs.writeFile(reportPath, 'ok');
+    await fs.utimes(reportPath, new Date(before + 50), new Date(before + 50));
 
     const files = await listRecentWorkspaceFiles(rootDir, before);
 
@@ -98,13 +102,16 @@ describe('listRecentWorkspaceFiles', () => {
 
   it('orders results by most recent change first', async () => {
     const before = Date.now();
-    await new Promise((resolve) => setTimeout(resolve, 5));
 
     const older = path.join(rootDir, 'older.txt');
     const newer = path.join(rootDir, 'newer.txt');
     await fs.writeFile(older, '1');
-    await new Promise((resolve) => setTimeout(resolve, 10));
     await fs.writeFile(newer, '2');
+    // Explicit mtimes: the implementation sorts by max(mtime, birthtime), so
+    // stamping both files deterministically (older < newer, both > before)
+    // removes the wall-clock jitter of relying on raw write order.
+    await fs.utimes(older, new Date(before + 1000), new Date(before + 1000));
+    await fs.utimes(newer, new Date(before + 2000), new Date(before + 2000));
 
     const files = await listRecentWorkspaceFiles(rootDir, before);
 

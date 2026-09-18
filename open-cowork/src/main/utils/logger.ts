@@ -32,7 +32,9 @@ export function runWithLogContext<T>(ctx: LogContext, fn: () => T): T {
  * 8 hex chars = enough to disambiguate concurrent queries.
  */
 export function generateTraceId(): string {
-  return randomUUID().slice(0, 8);
+  // 16 hex chars: long enough to keep trace envelopes collision-resistant
+  // and distinguishable from surrounding log tokens.
+  return randomUUID().replace(/-/g, '').slice(0, 16);
 }
 
 function formatCtxPrefix(): string {

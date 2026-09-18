@@ -99,7 +99,10 @@ describe('THREAT-05 / THREAT-13: Capability classifier keyword bypasses', () => 
       expect(decision.requiresExplicitApproval).toBe(false);
     });
 
-    it('DOCUMENTS GAP: default fallback (no keyword match, LOW) yields LOW_RISK_ACTION without approval', () => {
+    it('CLOSED GAP: default fallback (no keyword match) fails closed and requires approval', () => {
+      // Fail-closed: an unmatched capability (unknown keywords, LOW declared
+      // risk) must NOT be silently auto-allowed — it is treated as high risk
+      // and requires explicit human approval.
       const totallySanitized: CapabilityInput = {
         name: 'invoke_adapter_a1b2c3',
         riskLevel: 'LOW',
@@ -108,18 +111,18 @@ describe('THREAT-05 / THREAT-13: Capability classifier keyword bypasses', () => 
       };
 
       const result = classifyCapabilityRisk(totallySanitized);
-      expect(result).toBe('LOW_RISK_ACTION');
+      expect(result).toBe('HIGH_RISK_ACTION');
 
       const policy = new CyberPermissionPolicy();
       const decision = policy.decide(totallySanitized, {}, false);
-      expect(decision.allowed).toBe(true);
-      expect(decision.approvalState).toBe('NOT_REQUIRED');
-      expect(decision.requiresExplicitApproval).toBe(false);
+      expect(decision.allowed).toBe(false);
+      expect(decision.approvalState).toBe('REQUIRES_EXPLICIT_HUMAN_APPROVAL');
+      expect(decision.requiresExplicitApproval).toBe(true);
     });
   });
 
   describe('CyberPermissionPolicy decision matrix', () => {
-    it('requires explicit approval only for HIGH and DESTRUCTIVE; anything else is auto-allowed', () => {
+    it('requires explicit approval for HIGH, DESTRUCTIVE, and unmatched (fail-closed) capabilities', () => {
       const policy = new CyberPermissionPolicy();
 
       const allPermutations: Array<[CapabilityInput, boolean]> = [
@@ -140,8 +143,9 @@ describe('THREAT-05 / THREAT-13: Capability classifier keyword bypasses', () => 
           false,
         ],
         [
+          // Fail-closed default: unmatched capabilities require approval.
           { name: 'low_x', riskLevel: 'LOW', tags: ['generic'], permissionsRequired: [] },
-          false,
+          true,
         ],
       ];
 

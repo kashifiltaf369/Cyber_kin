@@ -1,5 +1,6 @@
 import { useEffect, useCallback } from 'react';
 import { useAppStore } from '../store';
+import { handleSubagentProgressEvent } from './useSubagentProgress';
 import type {
   AppConfig,
   ClientEvent,
@@ -308,6 +309,71 @@ export function useIPC() {
 
           case 'native-theme.changed':
             store.setSystemDarkMode(event.payload.shouldUseDarkColors);
+            break;
+
+          // -----------------------------------------------------------------
+          // KIN investigation events (SOC workspace)
+          // -----------------------------------------------------------------
+          case 'investigation.list':
+            store.setInvestigations(event.payload.investigations);
+            break;
+
+          case 'investigation.updated':
+            store.upsertInvestigation(event.payload.investigation);
+            break;
+
+          case 'demo.state':
+            // KIN Demo Mode — mirror the deterministic scenario controller's
+            // state snapshot into the store.
+            store.setDemoState(event.payload.state);
+            if (event.payload.state.investigationId) {
+              store.setActiveView('investigations');
+              store.setActiveInvestigation(event.payload.state.investigationId);
+            }
+            break;
+
+          case 'investigation.event':
+            // Fine-grained mirror of a single investigation event; the
+            // authoritative state arrives via investigation.updated payloads,
+            // so there is nothing to store here yet.
+            break;
+
+          case 'investigation.plan':
+            if (store.activeInvestigationId === event.payload.investigationId) {
+              store.setActiveInvestigationPlan(event.payload.plan);
+            }
+            break;
+
+          case 'investigation.replan':
+            if (store.activeInvestigationId === event.payload.investigationId) {
+              store.setActiveInvestigationReplan(event.payload.plan);
+              store.setActiveInvestigationPlan(event.payload.plan);
+            }
+            break;
+
+          case 'investigation.replanRecommendation':
+            if (store.activeInvestigationId === event.payload.investigationId) {
+              store.setActiveInvestigationRecommendation(event.payload.recommendation);
+            }
+            break;
+
+          // Subagent progress → subagent tracker singleton state
+          case 'subagent.progress':
+            handleSubagentProgressEvent(event.payload);
+            break;
+
+          // Compaction result → per-session compaction history + ContextUsageBar
+          case 'compaction.result':
+            store.addCompactionEvent(event.payload.sessionId, {
+              id: `compaction-${event.payload.sessionId}-${Date.now()}`,
+              timestamp: Date.now(),
+              tokensBefore: event.payload.tokensBefore,
+              tokensAfter: null,
+              summary: event.payload.summary,
+              readFiles: event.payload.readFiles,
+              modifiedFiles: event.payload.modifiedFiles,
+              type: event.payload.isManual ? 'manual' : 'auto',
+            });
             break;
 
           case 'new-session':

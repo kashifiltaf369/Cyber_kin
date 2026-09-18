@@ -22,6 +22,11 @@ import type {
   HMPIXCognitiveContext,
   HMPIXKernel,
   HMPIXEvent,
+  HMPIXProbeSignal,
+  HMPIXDecision,
+  HMPIXExecutionRisk,
+  HMPIXReplanTrigger,
+  HMPIXObservationType,
 } from '../../../main/investigation/hmpx-types';
 
 describe('HMPI-X type contracts (Phase 1)', () => {

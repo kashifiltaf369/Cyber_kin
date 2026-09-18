@@ -35,28 +35,27 @@ describe('THREAT-09: Path containment encoding & obfuscation edge cases', () => 
       expect(isPathWithinRoot('\x00', '/workspace')).toBe(false);
     });
 
-    it('DOCUMENTS GAP: URL-encoded null bytes (%00) are NOT decoded before containment check — lexical path passes if URL-decoded downstream', () => {
+    it('CLOSED GAP: URL-encoded null bytes (%00) are decoded before containment and rejected', () => {
       const encodedNullInput = '/sandbox/workspace/sess-123/secret%00.txt';
-      // The containment layer sees literal '%00' (3 chars), not 0x00.
+      // decodePathDefense decodes %00 to \x00 before any downstream consumer
+      // could see it; containment rejects null bytes outright.
       const result = isPathWithinRoot(encodedNullInput, POSIX_ROOT);
-      expect(result).toBe(true);
-      // If any downstream consumer calls decodeURIComponent() on the path,
-      // the null byte re-emerges → C-API truncation risk. Documented, not patched.
+      expect(result).toBe(false);
     });
 
-    it('DOCUMENTS GAP: double-encoded dot segments (%252e%252e) are NOT decoded and are treated as literal filenames', () => {
+    it('CLOSED GAP: double-encoded dot segments (%252e%252e) are iteratively decoded and rejected', () => {
       const doubleEncoded = '/sandbox/workspace/sess-123/%252e%252e/outside';
       const contained = isPathWithinRoot(doubleEncoded, POSIX_ROOT);
-      // Canonicalize sees '%252e%252e' as a directory name, not '..' → stays inside.
-      // IF downstream double-decodes (%25 → %, then %2e → .), escape occurs. Documented.
-      expect(contained).toBe(true);
+      // decodePathDefense decodes repeatedly (%25 → %, then %2e → .), so the
+      // escape attempt resolves as '..' and containment rejects it.
+      expect(contained).toBe(false);
     });
 
-    it('DOCUMENTS GAP: URL-encoded ../ (%2e%2e%2f) is treated as literal dir name; passes lexical containment', () => {
+    it('CLOSED GAP: URL-encoded ../ (%2e%2e%2f) is decoded and rejected as traversal', () => {
       const urlEncodedTraversal = '/sandbox/workspace/sess-123/%2e%2e/%2e%2e/etc/passwd';
       const contained = isPathWithinRoot(urlEncodedTraversal, POSIX_ROOT);
-      // %2e%2e → literal string (not resolved as ..) → passes
-      expect(contained).toBe(true);
+      // %2e%2e decodes to '..' before segment resolution → escapes root → rejected.
+      expect(contained).toBe(false);
     });
   });
 

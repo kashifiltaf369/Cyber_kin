@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { CyberCapabilityRegistry } from '../src/main/cyber/cyber-capability-registry';
 
@@ -20,14 +20,14 @@ describe('CyberCapabilityRegistry', () => {
     writeFileSync(filePath, 'suspicious artifact content\nsecond line', 'utf8');
 
     const registry = new CyberCapabilityRegistry();
-    const inspect = (await registry.execute('inspect_file', { filePath })) as {
+    const inspect = (await registry.execute('inspect_file', { filePath }, { workspacePath: root })) as {
       exists: boolean;
       preview: string;
     };
     const hash = (await registry.execute('calculate_hash', {
       filePath,
       algorithm: 'sha256',
-    })) as { algorithm: string; hash: string };
+    }, { workspacePath: root })) as { algorithm: string; hash: string };
 
     expect(inspect.exists).toBe(true);
     expect(inspect.preview).toContain('suspicious artifact content');
@@ -65,23 +65,24 @@ describe('CyberCapabilityRegistry', () => {
     );
 
     const registry = new CyberCapabilityRegistry();
+    const workspace = { workspacePath: root };
     const dns = (await registry.execute('search_dns', {
       sourcePath: dnsLog,
       query: 'evil.example',
-    })) as { records: Array<{ line: string }> };
+    }, workspace)) as { records: Array<{ line: string }> };
     const processResult = (await registry.execute('search_processes', {
       sourcePath: processes,
       query: 'powershell',
-    })) as { processes: Array<Record<string, unknown>> };
+    }, workspace)) as { processes: Array<Record<string, unknown>> };
     const networkResult = (await registry.execute('search_network_connections', {
       sourcePath: connections,
       query: '445',
-    })) as { connections: Array<Record<string, unknown>> };
+    }, workspace)) as { connections: Array<Record<string, unknown>> };
     const logQuery = (await registry.execute('query_local_logs', {
       directoryPath: root,
       query: 'evil.example',
       extensions: ['.log'],
-    })) as { files: Array<{ path: string; matches: Array<{ line: string }> }> };
+    }, workspace)) as { files: Array<{ path: string; matches: Array<{ line: string }> }> };
 
     expect(dns.records[0]?.line).toContain('evil.example');
     expect(processResult.processes).toHaveLength(1);
@@ -102,5 +103,119 @@ describe('CyberCapabilityRegistry', () => {
     expect(result.indicatorType).toBe('domain');
     expect(result.safeToEnrich).toBe(true);
     expect(result.summary).toContain('No vendor enrichment performed');
+  });
+
+  it('refuses filesystem capabilities with paths outside the session workspace', async () => {
+    const registry = new CyberCapabilityRegistry();
+    await expect(
+      registry.execute('inspect_file', { filePath: '/etc/passwd' }, { workspacePath: '/sandbox/workspace/sess-1' })
+    ).rejects.toThrow(/outside the session workspace/);
+
+    await expect(
+      registry.execute('calculate_hash', { filePath: '../../etc/passwd' }, { workspacePath: '/sandbox/workspace/sess-1' })
+    ).rejects.toThrow(/outside the session workspace/);
+  });
+
+  it('refuses filesystem capabilities when no workspace path is available (fail closed)', async () => {
+    const registry = new CyberCapabilityRegistry();
+    await expect(
+      registry.execute('inspect_file', { filePath: '/tmp/anything.txt' })
+    ).rejects.toThrow(/no workspace path is available/);
+  });
+
+  it('enforces the declared capability timeout and fails with a typed error', async () => {
+    const registry = new CyberCapabilityRegistry(
+      [
+        {
+          name: 'search_dns',
+          description: 'Slow capability for timeout verification.',
+          inputSchema: { type: 'object', properties: {} },
+          outputSchema: { type: 'object', properties: {} },
+          riskLevel: 'LOW',
+          permissionsRequired: [],
+          timeoutMs: 50,
+          cost: 'LOW',
+          supportedAdapters: [],
+          tags: ['dns'],
+          canAnswer: ['search dns'],
+          executor: async () => {
+            await new Promise((resolve) => setTimeout(resolve, 5000));
+            return { records: [] };
+          },
+        },
+      ],
+      { maxTimeoutMs: 120_000 }
+    );
+
+    await expect(registry.execute('search_dns', {})).rejects.toThrow(
+      /search_dns timed out after 50ms/
+    );
+  });
+
+  it('clamps declared timeouts above the configured hard cap', async () => {
+    const registry = new CyberCapabilityRegistry(
+      [
+        {
+          name: 'search_dns',
+          description: 'Over-eager timeout declaration.',
+          inputSchema: { type: 'object', properties: {} },
+          outputSchema: { type: 'object', properties: {} },
+          riskLevel: 'LOW',
+          permissionsRequired: [],
+          timeoutMs: 10_000,
+          cost: 'LOW',
+          supportedAdapters: [],
+          tags: ['dns'],
+          canAnswer: ['search dns'],
+          executor: async () => {
+            await new Promise((resolve) => setTimeout(resolve, 5000));
+            return { records: [] };
+          },
+        },
+      ],
+      // Hard cap far below the declared 10s: effective timeout is 100ms.
+      { maxTimeoutMs: 100 }
+    );
+
+    await expect(registry.execute('search_dns', {})).rejects.toThrow(
+      /timed out after 100ms \(declared 10000ms\)/
+    );
+  });
+
+  it('refuses paths that resolve through symlinks outside the session workspace', async () => {
+    const base = path.join(process.cwd(), 'tmp-cyber-symlink-test');
+    rmSync(base, { recursive: true, force: true });
+    const root = path.join(base, 'workspace');
+    const outside = path.join(base, 'outside');
+    mkdirSync(root, { recursive: true });
+    mkdirSync(outside, { recursive: true });
+    const secret = path.join(outside, 'secret.txt');
+    writeFileSync(secret, 'top secret', 'utf8');
+
+    const registry = new CyberCapabilityRegistry();
+
+    // 1. Existing symlinked FILE pointing outside the workspace.
+    const fileLink = path.join(root, 'innocent.txt');
+    symlinkSync(secret, fileLink);
+    await expect(
+      registry.execute('inspect_file', { filePath: fileLink }, { workspacePath: root })
+    ).rejects.toThrow(/outside the session workspace/);
+
+    // 2. Non-existent path under a symlinked DIRECTORY component.
+    const dirLink = path.join(root, 'docs');
+    symlinkSync(outside, dirLink);
+    await expect(
+      registry.execute('calculate_hash', { filePath: path.join(dirLink, 'new.txt') }, { workspacePath: root })
+    ).rejects.toThrow(/outside the session workspace/);
+
+    // 3. A genuinely local file still passes the real-path check.
+    const local = path.join(root, 'local.txt');
+    writeFileSync(local, 'inside', 'utf8');
+    const inspect = (await registry.execute('inspect_file', { filePath: local }, { workspacePath: root })) as {
+      exists: boolean;
+    };
+    expect(inspect.exists).toBe(true);
+
+    rmSync(base, { recursive: true, force: true });
   });
 });

@@ -64,12 +64,25 @@ function deepCloneAuditRecord(record: CyberActionAuditRecord): CyberActionAuditR
 export class CyberActionAuditTrail {
   private readonly records: CyberActionAuditRecord[] = [];
   private readonly appendedIds = new Set<string>();
+  private durableSink: ((record: CyberActionAuditRecord) => void) | null = null;
+
+  /**
+   * Attach a durable sink (see CyberAuditDurableStore). Called for every
+   * record appended AFTER attachment; a sink failure propagates so callers
+   * never get a silently unrecorded cyber action.
+   */
+  setDurableSink(sink: (record: CyberActionAuditRecord) => void): void {
+    this.durableSink = sink;
+  }
 
   append(record: Omit<CyberActionAuditRecord, 'id'>): CyberActionAuditRecord {
     const withId = { id: uuidv4(), ...record };
     const deeplyFrozen = deepFreeze(withId) as CyberActionAuditRecord;
     this.records.push(deeplyFrozen);
     this.appendedIds.add(deeplyFrozen.id);
+    if (this.durableSink) {
+      this.durableSink(deeplyFrozen);
+    }
     return deeplyFrozen;
   }
 
@@ -108,9 +121,8 @@ export function classifyCapabilityRisk(capability: Pick<CyberCapabilityDefinitio
   if (/inspect/.test(text)) {
     return 'ANALYSIS';
   }
-  if (capability.riskLevel === 'HIGH') {
-    return 'HIGH_RISK_ACTION';
-  }
+  // Fail closed: anything unmatched (including any remaining HIGH risk
+  // capability) is treated as a high-risk action and requires approval.
   return 'HIGH_RISK_ACTION';
 }
 

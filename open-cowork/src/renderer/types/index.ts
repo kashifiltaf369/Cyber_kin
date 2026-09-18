@@ -1,4 +1,16 @@
 // Session types
+import type {
+  ApplyHumanInterruptionInput,
+  CreateInvestigationInput,
+  Investigation,
+  InvestigationEvent,
+} from '../../shared/cyber/investigation-types';
+import type {
+  InvestigationPlan,
+  PlannedInvestigationTask,
+} from '../../main/investigation/parallel-investigation-engine';
+import type { DemoControllerState } from '../../shared/cyber/demo-types';
+
 export interface Session {
   id: string;
   title: string;
@@ -476,7 +488,41 @@ export type ClientEvent =
   | { type: 'folder.select'; payload: Record<string, never> }
   | { type: 'workdir.get'; payload: Record<string, never> }
   | { type: 'workdir.set'; payload: { path: string; sessionId?: string } }
-  | { type: 'workdir.select'; payload: { sessionId?: string; currentPath?: string } };
+  | { type: 'workdir.select'; payload: { sessionId?: string; currentPath?: string } }
+  | { type: 'session.compact'; payload: { sessionId: string; customInstructions?: string } }
+  | { type: 'session.getContextUsage'; payload: { sessionId: string } }
+  // KIN investigation orchestration
+  | { type: 'investigation.create'; payload: CreateInvestigationInput }
+  | { type: 'investigation.list'; payload: Record<string, never> }
+  | { type: 'investigation.get'; payload: { investigationId: string } }
+  | { type: 'investigation.open'; payload: { investigationId: string } }
+  | { type: 'investigation.resume'; payload: { investigationId: string } }
+  | { type: 'investigation.archive'; payload: { investigationId: string } }
+  | { type: 'investigation.plan'; payload: { investigationId: string } }
+  | { type: 'investigation.replan'; payload: { investigationId: string } }
+  | { type: 'investigation.getLatestReplanRecommendation'; payload: { investigationId: string } }
+  | { type: 'investigation.execute'; payload: { investigationId: string } }
+  | { type: 'investigation.pauseTask'; payload: { plannedTaskId: string; reason?: string } }
+  | { type: 'investigation.resumeTask'; payload: { plannedTaskId: string } }
+  | { type: 'investigation.reprioritizeTask'; payload: { plannedTaskId: string; priority: number; rationale?: string } }
+  | { type: 'investigation.createTask'; payload: { investigationId: string; task: PlannedInvestigationTask } }
+  | { type: 'investigation.applyHumanInterruption'; payload: ApplyHumanInterruptionInput }
+  | { type: 'investigation.cancelTask'; payload: { plannedTaskId: string; reason?: string } }
+  | { type: 'investigation.redirectTask'; payload: { plannedTaskId: string; description?: string; role?: string } }
+  | { type: 'investigation.exportReport'; payload: { investigationId: string } }
+  | { type: 'investigation.getReport'; payload: { investigationId: string } }
+  // KIN Demo Mode (deterministic scenario controller in the main process)
+  | { type: 'demo.start'; payload: Record<string, never> }
+  | { type: 'demo.restart'; payload: Record<string, never> }
+  | { type: 'demo.approve'; payload: { stepId: string } }
+  | { type: 'demo.deny'; payload: { stepId: string } }
+  | { type: 'demo.state'; payload: Record<string, never> }
+  // KIN synthetic demo environment (clearly separated demo mode)
+  | { type: 'synthetic.listScenarios'; payload: Record<string, never> }
+  | { type: 'synthetic.status'; payload: Record<string, never> }
+  | { type: 'synthetic.loadScenario'; payload: { scenarioId: string } }
+  | { type: 'synthetic.reset'; payload: Record<string, never> }
+  | { type: 'synthetic.seedInvestigation'; payload: { scenarioId: string } };
 
 // Sandbox setup types (app startup)
 export type SandboxSetupPhase = 
@@ -543,7 +589,19 @@ export type ServerEvent =
   | { type: 'new-session' }
   | { type: 'navigate'; payload: string }
   | { type: 'scheduled-task.error'; payload: { taskId: string; error: string } }
-  | { type: 'error'; payload: { message: string; code?: 'CONFIG_REQUIRED_ACTIVE_SET'; action?: 'open_api_settings' } };
+  | { type: 'error'; payload: { message: string; code?: 'CONFIG_REQUIRED_ACTIVE_SET'; action?: 'open_api_settings'; sessionId?: string } }
+  // Compaction + subagents (emitted by the agent runner / subagent extension)
+  | { type: 'compaction.result'; payload: { sessionId: string; summary: string; tokensBefore: number; isManual?: boolean; readFiles: string[]; modifiedFiles: string[] } }
+  | { type: 'subagent.progress'; payload: { parentSessionId: string; subagentId: string; event: 'started' | 'tool_start' | 'tool_end' | 'text_delta' | 'completed' | 'failed'; task?: string; toolName?: string; isError?: boolean; text?: string; durationMs?: number; error?: string } }
+  // KIN investigation lifecycle
+  | { type: 'investigation.list'; payload: { investigations: Investigation[] } }
+  | { type: 'investigation.updated'; payload: { investigation: Investigation } }
+  | { type: 'investigation.event'; payload: { investigationId: string; event: InvestigationEvent } }
+  | { type: 'investigation.plan'; payload: { investigationId: string; plan: InvestigationPlan } }
+  | { type: 'investigation.replan'; payload: { investigationId: string; plan: InvestigationPlan } }
+  | { type: 'investigation.replanRecommendation'; payload: { investigationId: string; recommendation: InvestigationEvent | null } }
+  // KIN Demo Mode state snapshot (deterministic scenario controller)
+  | { type: 'demo.state'; payload: { state: DemoControllerState } };
 
 // Settings types
 export interface Settings {

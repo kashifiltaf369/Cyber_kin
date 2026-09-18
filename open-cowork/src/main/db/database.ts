@@ -258,7 +258,7 @@ function prepareDatabaseDirectory(userDataPath: string): string {
 /**
  * Get the database file path
  */
-function getDatabasePath(): string {
+export function getDatabasePath(): string {
   // Use electron's userData path for persistent storage
   const userDataPath = app.getPath('userData');
   const dbDir = prepareDatabaseDirectory(userDataPath);
@@ -540,10 +540,12 @@ function ensureColumn(
 /**
  * Initialize the database
  */
-export function initDatabase(): DatabaseInstance {
+export function initDatabase(options: { dbPath?: string } = {}): DatabaseInstance {
   if (db) return db;
 
-  const dbPath = getDatabasePath();
+  // Tests inject ':memory:' (or a temp file) directly; the app resolves the
+  // per-user data directory.
+  const dbPath = options.dbPath ?? getDatabasePath();
   log('[Database] Opening database at:', dbPath);
 
   let rawDb: Database.Database;

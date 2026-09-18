@@ -12,6 +12,8 @@ import { useAppStore } from '../../store';
 import { useIPC } from '../../hooks/useIPC';
 import { useInvestigations } from '../../store/selectors';
 import { formatRelative } from './role-meta';
+import { DemoBadge, isSyntheticDemoInvestigation } from './demo-label';
+import { DemoModeIndicator } from '../demo/DemoModeIndicator';
 
 export interface InvestigationsListProps {
   onSelect: (id: string) => void;
@@ -95,6 +97,7 @@ export function InvestigationsList({ onSelect }: InvestigationsListProps) {
         >
           <Plus className="w-3.5 h-3.5" /> New investigation
         </button>
+        <DemoModeIndicator />
       </div>
 
       <div
@@ -206,6 +209,7 @@ function InvestigationRow({
             {investigation.objective}
           </p>
         </div>
+        {isSyntheticDemoInvestigation(investigation) && <DemoBadge />}
         <ChevronRight
           className="w-4 h-4 shrink-0 mt-0.5 opacity-60 group-hover:opacity-100"
           style={{ color: 'var(--soc-text-muted)' }}

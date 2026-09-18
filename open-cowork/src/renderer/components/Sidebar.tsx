@@ -14,6 +14,7 @@ import {
   Plus,
   ListChecks,
   Check,
+  ShieldHalf,
 } from 'lucide-react';
 import type { Session } from '../types';
 import { KinLogo } from './KinLogo';
@@ -148,6 +149,7 @@ export function Sidebar() {
   const handleSessionClick = useCallback(
     async (sessionId: string) => {
       setShowSettings(false);
+      useAppStore.getState().setActiveView('chat');
 
       if (activeSessionId === sessionId) return;
 
@@ -198,6 +200,12 @@ export function Sidebar() {
   const handleNewSession = () => {
     setActiveSession(null);
     setShowSettings(false);
+    useAppStore.getState().setActiveView('chat');
+  };
+
+  const handleOpenInvestigations = () => {
+    setShowSettings(false);
+    useAppStore.getState().setActiveView('investigations');
   };
 
   const handleDeleteSession = (e: React.MouseEvent, sessionId: string) => {
@@ -300,6 +308,15 @@ export function Sidebar() {
         >
           <Plus className="w-4 h-4 text-text-secondary flex-shrink-0" />
           <span className="text-[13px] font-medium">{t('sidebar.newTask')}</span>
+        </button>
+
+        <button
+          onClick={handleOpenInvestigations}
+          className="mt-2 w-full flex items-center gap-2 rounded-xl bg-background/60 px-3 py-2 text-left text-text-primary hover:bg-surface-hover transition-colors"
+          title="Open the investigations workspace"
+        >
+          <ShieldHalf className="w-4 h-4 text-text-secondary flex-shrink-0" />
+          <span className="text-[13px] font-medium">Investigations</span>
         </button>
 
         {sessions.length > 0 && (

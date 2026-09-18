@@ -64,7 +64,7 @@ dist*
 resources/node
 resources/tools
 resources/python
-docs/
+# docs/ — docs are tracked (memory-live-smoke-checklist.md is required by a test)
 /.mcp.json
 /eng.traineddata
 /jpn.traineddata

@@ -246,7 +246,7 @@ export class HypothesisService {
     }
 
     const normalized = this.normalize(currentHypothesis);
-    const nextStatus = input.relationship === 'SUPPORTS'
+    const nextStatus: InvestigationHypothesis['status'] = input.relationship === 'SUPPORTS'
       ? normalized.status === 'REJECTED' ? 'WEAKENED' : 'SUPPORTED'
       : normalized.status === 'PROMOTED' ? 'WEAKENED' : 'WEAKENED';
     const delta = input.relationship === 'SUPPORTS' ? 0.15 : -0.15;

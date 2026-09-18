@@ -102,9 +102,7 @@ describe('InvestigationContextExtension', () => {
     expect(result.customTools).toHaveLength(1);
 
     const tool = result.customTools?.[0];
-    const full = await tool?.execute('call-1', {}, undefined as never, undefined as never, {
-      sessionId: 'session-1',
-    });
+    const full = await tool?.execute('call-1', {}, undefined as never, undefined as never, { sessionManager: { getSessionId: () => 'session-1' } });
     const fullText = full?.content?.[0]?.type === 'text' ? full.content[0].text : '';
     expect(fullText).toContain('Possible credential theft');
     expect(fullText).toContain('Daily PowerShell maintenance windows');
@@ -114,7 +112,7 @@ describe('InvestigationContextExtension', () => {
       { section: 'constraints' },
       undefined as never,
       undefined as never,
-      { sessionId: 'session-1' }
+      { sessionManager: { getSessionId: () => 'session-1' } }
     );
     const constraintText = constraints?.content?.[0]?.type === 'text' ? constraints.content[0].text : '';
     expect(constraintText).toContain('Do not treat PowerShell alone as malicious');

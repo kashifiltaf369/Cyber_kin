@@ -163,7 +163,16 @@ function createExecuteTool(
           `Error: capability "${capability.name}" has disallowed risk level ${capability.riskLevel}.`
         );
       }
-      const sessionId = (ctx as { sessionId?: string } | undefined)?.sessionId;
+      const sessionId = (() => {
+        // The real pi ExtensionContext exposes the session id through its
+        // (readonly) session manager. Tests may pass a bare { sessionId }
+        // stub; prefer the runtime contract, fall back to the stub shape.
+        const ctxRecord = ctx as {
+          sessionManager?: { getSessionId?: () => string | null | undefined };
+          sessionId?: string;
+        } | undefined;
+        return ctxRecord?.sessionManager?.getSessionId?.() ?? ctxRecord?.sessionId;
+      })();
       if (!sessionId) {
         return toolTextResult('Error: session context unavailable.');
       }
@@ -185,7 +194,13 @@ function createExecuteTool(
         sessionId,
         capabilityName: capability.name,
         adapterPreference,
-      }) || { adapterPreference }) as CyberCapabilityAuditContext;
+      }) || {
+        adapterPreference,
+        // Containment anchor: pi's ExtensionContext carries the session's
+        // working directory. Without it, filesystem capabilities refuse to
+        // run (fail closed inside the registry).
+        workspacePath: (ctx as { cwd?: string } | undefined)?.cwd,
+      }) as CyberCapabilityAuditContext;
 
       const decision = permissionPolicy.decide(capability, input, executionContext.explicitHumanApproval === true);
       if (!decision.allowed) {
@@ -207,7 +222,28 @@ function createExecuteTool(
         return toolTextResult(`Error: ${decision.reason}`);
       }
 
-      const result = await registry.execute(capability.name, input, executionContext);
+      let result: unknown;
+      try {
+        result = await registry.execute(capability.name, input, executionContext);
+      } catch (error) {
+        // Failures (incl. containment refusals and execution timeouts) are
+        // audited like every other outcome — never a silent gap in the trail.
+        if (auditTrail) {
+          const record = permissionPolicy.audit(
+            auditTrail,
+            capability,
+            input,
+            { sessionId, investigationId, actor: 'agent', agent: sessionId },
+            decision,
+            {
+              status: 'failed',
+              summary: `Failed capability ${capability.name}: ${error instanceof Error ? error.message : String(error)}`,
+            }
+          );
+          options.onAuditRecord?.(record);
+        }
+        throw error;
+      }
       if (auditTrail) {
         const record = permissionPolicy.audit(
           auditTrail,

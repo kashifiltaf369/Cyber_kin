@@ -112,9 +112,7 @@ describe('InvestigationReplanExtension', () => {
     expect(result.customTools).toHaveLength(1);
 
     const tool = result.customTools?.[0];
-    const uncertainty = await tool?.execute('call-1', { queryType: 'uncertainty' }, undefined as never, undefined as never, {
-      sessionId: 'session-1',
-    });
+    const uncertainty = await tool?.execute('call-1', { queryType: 'uncertainty' }, undefined as never, undefined as never, { sessionManager: { getSessionId: () => 'session-1' } });
     expect(textFrom(uncertainty)).toContain('Current evidence');
 
     const cachedRecommendationBefore = await tool?.execute(
@@ -122,9 +120,7 @@ describe('InvestigationReplanExtension', () => {
       { queryType: 'cached_recommendation' },
       undefined as never,
       undefined as never,
-      {
-        sessionId: 'session-1',
-      }
+      { sessionManager: { getSessionId: () => 'session-1' } }
     );
     expect(textFrom(cachedRecommendationBefore)).toContain('"hasRecommendation": false');
     expect(textFrom(cachedRecommendationBefore)).toContain('"source": "cached_event"');
@@ -153,25 +149,19 @@ describe('InvestigationReplanExtension', () => {
       { queryType: 'cached_recommendation' },
       undefined as never,
       undefined as never,
-      {
-        sessionId: 'session-1',
-      }
+      { sessionManager: { getSessionId: () => 'session-1' } }
     );
     expect(textFrom(cachedRecommendationAfter)).toContain('"hasRecommendation": true');
     expect(textFrom(cachedRecommendationAfter)).toContain('Replan recommended after evidence merge');
     expect(textFrom(cachedRecommendationAfter)).toContain('Historical Investigator');
     expect(textFrom(cachedRecommendationAfter)).toContain('"autoExecuted": false');
 
-    const nextBestWork = await tool?.execute('call-4', { queryType: 'next_best_work' }, undefined as never, undefined as never, {
-      sessionId: 'session-1',
-    });
+    const nextBestWork = await tool?.execute('call-4', { queryType: 'next_best_work' }, undefined as never, undefined as never, { sessionManager: { getSessionId: () => 'session-1' } });
     expect(textFrom(nextBestWork)).toContain('advisoryOnly');
     expect(textFrom(nextBestWork)).toContain('recommendedTasks');
     expect(textFrom(nextBestWork)).toContain('"source": "computed"');
 
-    const fullReplan = await tool?.execute('call-5', { queryType: 'full_replan' }, undefined as never, undefined as never, {
-      sessionId: 'session-1',
-    });
+    const fullReplan = await tool?.execute('call-5', { queryType: 'full_replan' }, undefined as never, undefined as never, { sessionManager: { getSessionId: () => 'session-1' } });
     expect(textFrom(fullReplan)).toContain('uncertainty');
     expect(textFrom(fullReplan)).toContain('nextBestWork');
   });

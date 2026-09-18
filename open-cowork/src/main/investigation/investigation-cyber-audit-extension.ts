@@ -47,7 +47,7 @@ function createCyberAuditQueryTool(
         })
       ),
     }),
-    async execute(_toolCallId: string, params: unknown, _signal: AbortSignal | undefined, _onUpdate: any, ctx: ExtensionContext) {
+    async execute(_toolCallId: string, params: unknown, _signal: AbortSignal | undefined, _onUpdate: unknown, ctx: ExtensionContext) {
       const sessionId = ctx.sessionManager.getSessionId();
       if (!sessionId) {
         return toolTextResult('Error: session context unavailable.');

@@ -104,21 +104,15 @@ describe('InvestigationCyberAuditExtension', () => {
     expect(result.customTools).toHaveLength(1);
 
     const tool = result.customTools?.[0];
-    const recent = await tool?.execute('call-1', { mode: 'recent', limit: 5 }, undefined as never, undefined as never, {
-      sessionId: 'session-1',
-    });
+    const recent = await tool?.execute('call-1', { mode: 'recent', limit: 5 }, undefined as never, undefined as never, { sessionManager: { getSessionId: () => 'session-1' } });
     expect(textFrom(recent)).toContain('CYBER_ACTION_AUDITED');
     expect(textFrom(recent)).toContain('inspect_file');
 
-    const denied = await tool?.execute('call-2', { mode: 'denied' }, undefined as never, undefined as never, {
-      sessionId: 'session-1',
-    });
+    const denied = await tool?.execute('call-2', { mode: 'denied' }, undefined as never, undefined as never, { sessionManager: { getSessionId: () => 'session-1' } });
     expect(textFrom(denied)).toContain('DESTRUCTIVE_ACTION');
     expect(textFrom(denied)).toContain('Requires explicit human approval');
 
-    const summary = await tool?.execute('call-3', { mode: 'summary' }, undefined as never, undefined as never, {
-      sessionId: 'session-1',
-    });
+    const summary = await tool?.execute('call-3', { mode: 'summary' }, undefined as never, undefined as never, { sessionManager: { getSessionId: () => 'session-1' } });
     expect(textFrom(summary)).toContain('totalAuditEvents');
     expect(textFrom(summary)).toContain('explicitApprovalRequiredCount');
 

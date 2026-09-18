@@ -15,6 +15,7 @@ import {
 import type { Investigation } from '../../../shared/cyber/investigation-types';
 import { useActiveInvestigationPlan, useActiveInvestigationReplan } from '../../store/selectors';
 import { formatRelative } from './role-meta';
+import { DemoBadge, isSyntheticDemoInvestigation } from './demo-label';
 
 export interface InvestigationHeaderProps {
   investigation: Investigation;
@@ -132,10 +133,11 @@ export function InvestigationHeader({
             )}
           </div>
           <h1
-            className="text-[19px] font-semibold leading-tight tracking-[-0.01em] truncate"
+            className="text-[19px] font-semibold leading-tight tracking-[-0.01em] truncate flex items-center gap-2"
             style={{ color: 'var(--soc-text-primary)' }}
           >
-            {investigation.title || 'Untitled investigation'}
+            <span className="truncate">{investigation.title || 'Untitled investigation'}</span>
+            {isSyntheticDemoInvestigation(investigation) && <DemoBadge />}
           </h1>
           <p
             className="mt-1 text-[12.5px] leading-relaxed line-clamp-2"

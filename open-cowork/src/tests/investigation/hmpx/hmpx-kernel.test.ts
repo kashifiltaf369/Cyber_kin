@@ -5,18 +5,18 @@
  * OpenCowork infrastructure and produces valid HMPI-X contracts.
  */
 
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { HMPIXKernelImpl, DEFAULT_PROBE_BUDGET, DefaultProbeExecutor } from '../../../main/investigation/hmpx-kernel';
 import type {
   HMPIXCapabilityCandidate,
   HMPIXCognitiveContext,
   HMPIXProblem,
-  HMPIXProbeBudget,
   HMPIXProbeResult,
   HMPIXSelection,
   HMPIXSubProblem,
 } from '../../../main/investigation/hmpx-types';
 import type {
+  CyberCapabilityName,
   CyberCapabilityDefinition,
   CyberCapabilityRegistry,
 } from '../../../main/cyber/cyber-capability-registry';
@@ -30,7 +30,7 @@ import type { InvestigationService } from '../../../main/investigation/investiga
 
 function createMockCyberCapability(name: string, tags: string[] = []): CyberCapabilityDefinition {
   return {
-    name: name as any,
+    name: name as CyberCapabilityName,
     description: `Capability ${name}`,
     inputSchema: { type: 'object', properties: {} },
     outputSchema: { type: 'object', properties: {} },
@@ -49,7 +49,7 @@ function createMockCyberCapability(name: string, tags: string[] = []): CyberCapa
 function createMockCyberRegistry(caps: CyberCapabilityDefinition[]): CyberCapabilityRegistry {
   return {
     list: () => caps,
-    get: (name) => caps.find((c) => c.name === name) || null,
+    get: (name: string) => caps.find((c) => c.name === name) || null,
     discover: (question: string) => {
       const q = question.toLowerCase();
       return caps
@@ -61,7 +61,7 @@ function createMockCyberRegistry(caps: CyberCapabilityDefinition[]): CyberCapabi
         .filter((item) => item.score > 0)
         .sort((a, b) => b.score - a.score);
     },
-    execute: async (name, input) => {
+    execute: async (name: string, input: unknown) => {
       const cap = caps.find((c) => c.name === name);
       if (!cap) throw new Error(`Unknown capability: ${name}`);
       return cap.executor(input);
@@ -71,7 +71,7 @@ function createMockCyberRegistry(caps: CyberCapabilityDefinition[]): CyberCapabi
 
 function createMockAgentRegistry(roles: AgentCapabilityDefinition[]): AgentCapabilityRegistry {
   return {
-    get: (role) => roles.find((r) => r.role === role) || null,
+    get: (role: string) => roles.find((r) => r.role === role) || null,
     list: () => roles,
     selectRolesForInvestigation: () => roles.map((r) => r.role),
   } as unknown as AgentCapabilityRegistry;
@@ -105,10 +105,6 @@ function createMockReplanner(): InvestigationReplanner {
 
 function createMockInvestigationService(): InvestigationService {
   return {} as InvestigationService;
-}
-
-function createMockProbeExecutor(): DefaultProbeExecutor {
-  return new DefaultProbeExecutor(createMockCyberRegistry([]));
 }
 
 function buildDeps(capabilities: CyberCapabilityDefinition[] = [], agentRoles: AgentCapabilityDefinition[] = []) {
@@ -317,9 +313,9 @@ describe('HMPIXKernelImpl', () => {
   // -------------------------------------------------------------------------
   describe('probe', () => {
     it('returns results for probeable capabilities within budget', async () => {
-      const cyberCaps = [
+      const cyberCaps: CyberCapabilityDefinition[] = [
         {
-          name: 'search_processes',
+          name: 'search_processes' as CyberCapabilityName,
           description: 'Search processes.',
           inputSchema: { type: 'object', properties: {} },
           outputSchema: { type: 'object', properties: {} },
@@ -334,7 +330,7 @@ describe('HMPIXKernelImpl', () => {
           executor: async () => ({ matches: [{ id: 'ev-probe-1', line: 'powershell.exe' }] }),
         },
       ];
-      const kernel = new HMPIXKernelImpl(buildDeps(cyberCaps as any));
+      const kernel = new HMPIXKernelImpl(buildDeps(cyberCaps));
       const sub: HMPIXSubProblem = {
         id: 'sub-1',
         problemId: 'p1',
@@ -348,7 +344,7 @@ describe('HMPIXKernelImpl', () => {
 
       const candidates: HMPIXCapabilityCandidate[] = [
         {
-          capability: kernel['toHMPIXCapability'](cyberCaps[0] as any),
+          capability: kernel['toHMPIXCapability'](cyberCaps[0]),
           relevance: 0.8,
           expectedInformationGain: 0.7,
           confidence: 0.8,
