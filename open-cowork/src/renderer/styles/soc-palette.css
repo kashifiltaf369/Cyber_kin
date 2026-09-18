@@ -1,0 +1,68 @@
+/* SOC Investigation Workspace palette
+ *
+ * Additive — does NOT override the default theme variables used by the rest of
+ * the app. These tokens are consumed only by `src/renderer/components/workspace/*`
+ * so the existing chat/settings UI remains unchanged.
+ */
+
+:root {
+  --soc-bg-canvas: #080A0D;
+  --soc-bg-primary: #0D1014;
+  --soc-bg-secondary: #12161B;
+  --soc-bg-tertiary: #181D23;
+
+  --soc-surface-card: #11151A;
+  --soc-surface-card-hover: #161B21;
+  --soc-surface-elevated: #1A2027;
+  --soc-surface-overlay: #20262E;
+
+  --soc-border-default: #252C34;
+  --soc-border-subtle: #1C2229;
+  --soc-border-strong: #343C46;
+  --soc-border-focus: #3BA7FF;
+
+  --soc-text-primary: #F2F5F7;
+  --soc-text-secondary: #B5BEC8;
+  --soc-text-muted: #7F8994;
+  --soc-text-disabled: #525B65;
+
+  --soc-accent-primary: #38BDF8;
+  --soc-accent-primary-hover: #60CFFF;
+  --soc-accent-primary-muted: #123448;
+
+  --soc-success-main: #34D399;
+  --soc-success-muted: #12382F;
+  --soc-warning-main: #F5B942;
+  --soc-warning-muted: #3A2D12;
+  --soc-danger-main: #F05252;
+  --soc-danger-muted: #3B191C;
+  --soc-info-main: #60A5FA;
+  --soc-info-muted: #172C46;
+
+  --soc-inv-observed: #60A5FA;
+  --soc-inv-correlated: #A78BFA;
+  --soc-inv-inferred: #F5B942;
+  --soc-inv-unknown: #7F8994;
+  --soc-inv-verified: #34D399;
+  --soc-inv-conflicted: #F05252;
+
+  --soc-ai-primary: #8B7CFF;
+  --soc-ai-secondary: #38BDF8;
+  --soc-ai-background: #141528;
+  --soc-ai-border: #38345C;
+
+  --soc-sev-critical: #F05252;
+  --soc-sev-high: #FB7185;
+  --soc-sev-medium: #F5B942;
+  --soc-sev-low: #60A5FA;
+  --soc-sev-info: #7F8994;
+}
+
+@keyframes soc-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.55; transform: scale(1.4); }
+}
+
+@keyframes soc-spin {
+  to { transform: rotate(360deg); }
+}

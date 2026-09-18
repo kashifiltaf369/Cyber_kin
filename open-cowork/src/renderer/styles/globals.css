@@ -1,0 +1,461 @@
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=Source+Serif+4:opsz,wght@8..60,400;8..60,500;8..60,600;8..60,700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  /* Define CSS variables for theming */
+  :root {
+    /* === KIN Design System — Color Tokens === */
+
+    /* Background */
+    --color-background: #080A0D;
+    --color-background-secondary: #0D1014;
+    --color-background-tertiary: #181D23;
+
+    /* Surface */
+    --color-surface: #12161B;
+    --color-surface-hover: #161B21;
+    --color-surface-active: #181D23;
+    --color-surface-muted: #11151A;
+    --color-surface-elevated: #1A2027;
+    --color-surface-overlay: #20262E;
+
+    /* Border */
+    --color-border: #252C34;
+    --color-border-muted: #1C2229;
+    --color-border-subtle: rgba(255, 255, 255, 0.06);
+    --color-border-strong: #343C46;
+    --color-border-focus: #3BA7FF;
+
+    /* Text */
+    --color-text-primary: #F2F5F7;
+    --color-text-secondary: #B5BEC8;
+    --color-text-muted: #7F8994;
+    --color-text-disabled: #525B65;
+
+    /* Primary Accent */
+    --color-accent: #38BDF8;
+    --color-accent-hover: #60CFFF;
+    --color-accent-muted: #123448;
+
+    /* Semantic */
+    --color-success: #34D399;
+    --color-success-muted: #12382F;
+    --color-warning: #F5B942;
+    --color-warning-muted: #3A2D12;
+    --color-danger: #F05252;
+    --color-danger-muted: #3B191C;
+    --color-info: #60A5FA;
+    --color-info-muted: #172C46;
+
+    /* AI */
+    --color-ai-primary: #8B7CFF;
+    --color-ai-secondary: #38BDF8;
+    --color-ai-background: #141528;
+    --color-ai-border: #38345C;
+
+    /* Investigation */
+    --color-inv-observed: #60A5FA;
+    --color-inv-correlated: #A78BFA;
+    --color-inv-inferred: #F5B942;
+    --color-inv-unknown: #7F8994;
+    --color-inv-verified: #34D399;
+    --color-inv-conflicted: #F05252;
+
+    /* Severity */
+    --color-sev-critical: #F05252;
+    --color-sev-high: #FB7185;
+    --color-sev-medium: #F5B942;
+    --color-sev-low: #60A5FA;
+    --color-sev-info: #7F8994;
+
+    /* Legacy MCP */
+    --color-mcp: #9d8abc;
+
+    /* Shadows */
+    --shadow-soft: 0 1px 4px rgba(0, 0, 0, 0.24);
+    --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.22), 0 0 0 1px rgba(255, 255, 255, 0.03);
+    --shadow-elevated: 0 8px 24px rgba(0, 0, 0, 0.34), 0 0 0 1px rgba(255, 255, 255, 0.04);
+    --shadow-focus: 0 0 0 2px rgba(59, 167, 255, 0.35);
+
+    /* Radius */
+    --radius-sm: 6px;
+    --radius-md: 8px;
+    --radius-lg: 10px;
+    --radius-xl: 12px;
+    --radius-2xl: 14px;
+    --radius-3xl: 16px;
+
+    /* Spacing */
+    --space-1: 4px;
+    --space-2: 8px;
+    --space-3: 12px;
+    --space-4: 16px;
+    --space-5: 20px;
+    --space-6: 24px;
+    --space-7: 32px;
+    --space-8: 40px;
+    --space-9: 48px;
+    --space-10: 64px;
+
+    /* Motion */
+    --duration-fast: 120ms;
+    --duration-normal: 200ms;
+    --duration-slow: 320ms;
+    --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+    --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  /* Light theme override — KIN professional light palette */
+  .light {
+    /* Background */
+    --color-background: #F8F9FA;
+    --color-background-secondary: #F0F1F3;
+    --color-background-tertiary: #E8EAED;
+
+    /* Surface */
+    --color-surface: #FFFFFF;
+    --color-surface-hover: #F5F6F8;
+    --color-surface-active: #E8EAED;
+    --color-surface-muted: #F0F1F3;
+    --color-surface-elevated: #FFFFFF;
+    --color-surface-overlay: #E8EAED;
+
+    /* Border */
+    --color-border: #D1D5DB;
+    --color-border-muted: #E5E7EB;
+    --color-border-subtle: rgba(0, 0, 0, 0.05);
+    --color-border-strong: #9CA3AF;
+    --color-border-focus: #0284C7;
+
+    /* Text */
+    --color-text-primary: #111827;
+    --color-text-secondary: #4B5563;
+    --color-text-muted: #9CA3AF;
+    --color-text-disabled: #D1D5DB;
+
+    /* Primary Accent */
+    --color-accent: #0EA5E9;
+    --color-accent-hover: #0284C7;
+    --color-accent-muted: #E0F2FE;
+
+    /* Semantic */
+    --color-success: #10B981;
+    --color-success-muted: #D1FAE5;
+    --color-warning: #F59E0B;
+    --color-warning-muted: #FEF3C7;
+    --color-danger: #EF4444;
+    --color-danger-muted: #FEE2E2;
+    --color-info: #3B82F6;
+    --color-info-muted: #DBEAFE;
+
+    /* AI */
+    --color-ai-primary: #7C3AED;
+    --color-ai-secondary: #0EA5E9;
+    --color-ai-background: #F5F3FF;
+    --color-ai-border: #C4B5FD;
+
+    /* Investigation */
+    --color-inv-observed: #3B82F6;
+    --color-inv-correlated: #8B5CF6;
+    --color-inv-inferred: #F59E0B;
+    --color-inv-unknown: #9CA3AF;
+    --color-inv-verified: #10B981;
+    --color-inv-conflicted: #EF4444;
+
+    /* Severity */
+    --color-sev-critical: #EF4444;
+    --color-sev-high: #F43F5E;
+    --color-sev-medium: #F59E0B;
+    --color-sev-low: #3B82F6;
+    --color-sev-info: #9CA3AF;
+
+    /* Legacy MCP */
+    --color-mcp: #7c6fa3;
+
+    /* Shadows */
+    --shadow-soft: 0 1px 4px rgba(0, 0, 0, 0.06);
+    --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.04);
+    --shadow-elevated: 0 4px 12px rgba(0, 0, 0, 0.08);
+    --shadow-focus: 0 0 0 2px rgba(2, 132, 199, 0.35);
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  html,
+  body,
+  #root {
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    overflow: hidden;
+    overscroll-behavior: none;
+  }
+
+  body {
+    background-color: var(--color-background);
+    color: var(--color-text-primary);
+    font-family: -apple-system, BlinkMacSystemFont, 'Plus Jakarta Sans', system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+  }
+
+  /* Custom scrollbar — only on non-macOS platforms.
+     macOS uses native overlay scrollbars which are better. */
+  @supports not (font: -apple-system-body) {
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+
+    ::-webkit-scrollbar-track {
+      @apply bg-transparent;
+    }
+
+    ::-webkit-scrollbar-thumb {
+      @apply bg-border rounded-full;
+    }
+
+    ::-webkit-scrollbar-thumb:hover {
+      @apply bg-text-muted;
+    }
+  }
+}
+
+@layer components {
+  /* Heading serif font — for titles and headings */
+  .heading-serif {
+    font-family: 'Source Serif 4', Georgia, serif;
+  }
+
+  /* Button styles */
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl font-medium transition-all duration-150;
+    @apply focus:outline-none focus:ring-2 focus:ring-accent focus:ring-opacity-30;
+  }
+
+  .btn-primary {
+    @apply bg-accent text-white hover:bg-accent-hover;
+    @apply shadow-soft;
+  }
+
+  .btn-secondary {
+    @apply bg-surface border border-border hover:bg-surface-hover text-text-primary;
+  }
+
+  .btn-ghost {
+    @apply bg-transparent hover:bg-surface-active text-text-secondary hover:text-text-primary;
+  }
+
+  /* Input styles */
+  .input {
+    @apply w-full px-4 py-3 rounded-xl bg-surface border border-border;
+    @apply text-text-primary placeholder:text-text-muted;
+    @apply focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent focus:ring-opacity-30;
+    @apply transition-all duration-150;
+  }
+
+  /* Card styles */
+  .card {
+    @apply bg-surface rounded-2xl shadow-card border border-border-subtle;
+  }
+
+  /* Tag/Chip styles - like the quick action buttons */
+  .tag {
+    @apply inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-surface border border-border;
+    @apply text-sm font-medium text-text-primary;
+    @apply hover:bg-surface-hover hover:shadow-soft cursor-pointer transition-all duration-150;
+  }
+
+  /* Badge styles */
+  .badge {
+    @apply inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium;
+  }
+}
+
+@layer utilities {
+  /* Window drag region for custom titlebar */
+  .titlebar-drag {
+    -webkit-app-region: drag;
+    app-region: drag;
+  }
+
+  .titlebar-no-drag {
+    -webkit-app-region: no-drag;
+    app-region: no-drag;
+  }
+
+  /* Message bubbles */
+  .message-user {
+    @apply bg-surface rounded-2xl border border-border-subtle;
+    width: fit-content;
+    margin-left: auto;
+  }
+
+  /* Prose styling for assistant messages - elegant serif font */
+  .prose-chat {
+    font-family: 'Source Serif 4', Georgia, 'Times New Roman', serif;
+    font-size: 1.0625rem;
+    line-height: 1.625;
+    letter-spacing: -0.01em;
+  }
+
+  .prose-chat p {
+    margin-bottom: 0.75rem;
+  }
+
+  .prose-chat p:last-child {
+    margin-bottom: 0;
+  }
+
+  .prose-chat strong {
+    font-weight: 600;
+  }
+
+  .prose-chat em {
+    font-style: italic;
+  }
+
+  .prose-chat ul, .prose-chat ol {
+    margin: 0.75rem 0;
+    padding-left: 1.5rem;
+  }
+
+  .prose-chat ul {
+    list-style: disc;
+    list-style-position: outside;
+  }
+
+  .prose-chat ul ul {
+    list-style: circle;
+  }
+
+  .prose-chat ul ul ul {
+    list-style: square;
+  }
+
+  .prose-chat ol {
+    list-style: decimal;
+    list-style-position: outside;
+  }
+
+  .prose-chat li {
+    margin-bottom: 0.2rem;
+  }
+
+  /* Tighten markdown loose-lists: avoid large gaps when li wraps content in <p> */
+  .prose-chat li > p {
+    margin-top: 0;
+    margin-bottom: 0;
+  }
+
+  .prose-chat li p {
+    margin-top: 0;
+    margin-bottom: 0;
+  }
+
+  .prose-chat li > ul,
+  .prose-chat li > ol {
+    margin-top: 0.35rem;
+    margin-bottom: 0.35rem;
+  }
+
+  .prose-chat h1, .prose-chat h2, .prose-chat h3, .prose-chat h4 {
+    font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+    font-weight: 600;
+    margin-top: 1.25rem;
+    margin-bottom: 0.5rem;
+  }
+
+  .prose-chat > :first-child {
+    margin-top: 0;
+  }
+
+  .prose-chat h1 { font-size: 1.5rem; }
+  .prose-chat h2 { font-size: 1.25rem; }
+  .prose-chat h3 { font-size: 1.125rem; }
+  .prose-chat h4 { font-size: 1rem; }
+
+  .prose-chat .katex-display {
+    margin: 1rem 0;
+    overflow-x: auto;
+    overflow-y: hidden;
+  }
+
+  .prose-chat .katex {
+    font-size: 1.1em;
+  }
+
+  /* Prevent long inline math from overflowing the container */
+  .prose-chat .katex-html {
+    overflow-x: auto;
+    overflow-y: hidden;
+  }
+
+  .prose-chat a {
+    color: theme('colors.accent.DEFAULT');
+    text-decoration-line: underline;
+    text-decoration-thickness: 0.08em;
+    text-underline-offset: 0.22em;
+    text-decoration-skip-ink: auto;
+  }
+
+  /* Some model outputs wrap citation links in ~...~; keep links readable */
+  .prose-chat del {
+    text-decoration: none;
+  }
+
+  .prose-chat del a {
+    text-decoration-line: underline;
+  }
+
+  .prose-chat blockquote {
+    margin: 0.75rem 0;
+    padding-left: 1rem;
+    border-left: 3px solid theme('colors.accent.DEFAULT / 40%');
+    color: theme('colors.text.secondary');
+  }
+
+  .prose-chat .footnotes {
+    margin-top: 1rem;
+    font-size: 0.875rem;
+    color: theme('colors.text.muted');
+  }
+
+  .prose-chat .footnotes ol {
+    padding-left: 1.25rem;
+  }
+
+  .prose-chat .footnotes li {
+    margin-bottom: 0.5rem;
+  }
+
+  .prose-chat .footnotes p {
+    margin: 0.25rem 0 0;
+  }
+
+  /* Code block */
+  .code-block {
+    @apply bg-surface-muted rounded-xl p-4 font-mono text-sm overflow-x-auto border border-border-subtle;
+  }
+
+  /* Override hljs theme background to use our code-block background */
+  .code-block .hljs,
+  .code-block code {
+    background: transparent;
+  }
+}
+
+/* Respect reduced motion preferences */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
