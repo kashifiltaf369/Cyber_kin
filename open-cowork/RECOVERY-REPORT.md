@@ -1,6 +1,6 @@
 # KIN Controlled Integration Recovery — Final Report (§20)
 
-Session branch: `arena/01a0b669-cyber-kin` · Commit: `0903fc1`
+Session branch: `arena/01a0b669-cyber-kin` · Commit: `752a737`
 Scope: repair the existing implementation, connect existing pieces, fix verified defects only, preserve OpenCowork, prove it works.
 
 ---
@@ -24,7 +24,7 @@ Scope: repair the existing implementation, connect existing pieces, fix verified
 | A13 | `investigation.replan` result never broadcast; `redirectTask` forwarded arbitrary renderer-supplied role strings | static | **FIXED** |
 | A14 | hmpx-kernel didn't import the types it references; probe executor typed on the unmapped capability; `UNKNOWN` findings violated the evidence type | 22 tsc errors | **FIXED** (compile-only; still unwired by design) |
 
-## B. What changed (commit `0903fc1`, 61 files)
+## B. What changed (commit `752a737`)
 
 - **Types/contract**: `src/renderer/types/index.ts` (full Client/ServerEvent unions), `src/preload/index.ts` (typed `synthetic` namespace + allowlist), `src/main/client-event-utils.ts`, `src/shared/cyber/investigation-types.ts` (`HumanInterruptionKind` incl. `direction`, `ApplyHumanInterruptionInput`, `plannedTaskId`).
 - **Store/UI**: `store/index.ts` (investigations slice + `activeView`), `store/selectors.ts` (5 hooks), `hooks/useIPC.ts` (8 forwarded event cases), `App.tsx` (lazy Investigations view), `Sidebar.tsx` (nav entry), `InvestigationWorkspace.tsx` (list view, plan/recommendation loading, hooks-order fix, `as any` removed), `InvestigationsList.tsx` + `InvestigationHeader.tsx` + new `demo-label.tsx` (DEMO badge).
@@ -110,7 +110,7 @@ Remaining security gaps (documented, not hidden): audit trail has no hash chain/
 - C1. Live worker execution unverified (needs one environment with a configured model + API key; run `investigation.execute` once and confirm worker sessions complete and evidence lands). Everything up to dispatch is tested.
 
 **HIGH**
-- H1. Electron GUI smoke pass: open the Investigations view, create → execute → approve replan with a real window (component/store layers are verified; the running app is not).
+- H1. Electron GUI smoke pass: open the Investigations view, create → execute → approve replan with a real window (component/store layers are verified; the running app is not). Environmental evidence for why this sandbox cannot close it: the Electron binary itself cannot be installed — `npm ci --ignore-scripts` skips its postinstall, and the postinstall download fails because release assets redirect to `objects.githubusercontent.com`, which is unreachable from this sandbox (`curl` to the 302 target fails; `npmmirror.com` mirror unreachable; direct download via `node install.js` fails with `Client network socket disconnected before secure TLS connection was established`). The app's own headless RPC mode (`electron . --headless --mode rpc --cwd …`, which serves `handleClientEvent` over stdin JSONL and would have driven the same IPC path as the GUI without a display) was the intended vehicle and is blocked by the same missing binary.
 
 **MEDIUM**
 - M1. Durable append-only audit file (+ optional hash chain) — currently memory + investigation event mirror only.
