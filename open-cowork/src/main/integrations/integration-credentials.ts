@@ -111,6 +111,13 @@ function redactCredentialString(raw: string): string {
   next = next.replace(/\b[A-Za-z0-9+/]{8,}={0,2}\b/g, (match) => {
     if (match.length < 8) return match;
     if (match.length >= 32) return REDACTED_VALUE;
+    // Never re-wrap an already-redacted token ([redacted] itself is an 8-char
+    // alpha word and would otherwise become [[redacted]]).
+    if (match === 'redacted') return match;
+    // Heuristic guard against redacting ordinary English words: a short
+    // base64-looking fragment of a real secret virtually always contains at
+    // least one digit or base64 symbol; plain words never do.
+    if (!/[0-9+/]/.test(match)) return match;
     const unique = new Set(match.toLowerCase());
     const alphaCount = (match.match(/[A-Za-z]/g) || []).length;
     const digitCount = (match.match(/[0-9]/g) || []).length;

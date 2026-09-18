@@ -15,6 +15,7 @@ import {
   Sparkles,
   Flag,
 } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import type {
   Investigation,
   InvestigationEvent,
@@ -29,7 +30,7 @@ export interface TimelineProps {
   investigation: Investigation;
 }
 
-const EVENT_ICON: Record<string, { icon: any; color: string; muted: string }> = {
+const EVENT_ICON: Record<string, { icon: LucideIcon; color: string; muted: string }> = {
   INVESTIGATION_CREATED: { icon: Plus, color: 'var(--soc-info-main)', muted: 'var(--soc-info-muted)' },
   INVESTIGATION_OPENED: { icon: Eye, color: 'var(--soc-text-muted)', muted: 'var(--soc-surface-elevated)' },
   INVESTIGATION_RESUMED: { icon: Play, color: 'var(--soc-accent-primary)', muted: 'var(--soc-accent-primary-muted)' },

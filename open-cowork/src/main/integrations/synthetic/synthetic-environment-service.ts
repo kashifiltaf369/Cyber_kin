@@ -82,7 +82,14 @@ export class SyntheticEnvironmentService {
   }
 
   load(scenarioId: ScenarioId): SyntheticDataset {
-    this.requireEnabled();
+    // Only the enabled guard applies here — load() is the operation that
+    // populates the store, so demanding an already-loaded dataset would be a
+    // deadlock (this was a real bug: fresh services could never load()).
+    if (!this.enabled) {
+      throw new Error(
+        `[${SYNTHETIC_WATERMARK}] Synthetic environment is disabled. Set CYBER_SYNTHETIC_ENABLED=1 to enable.`,
+      );
+    }
     const scenario = buildSyntheticScenario(scenarioId);
     const dataset = scenario.build();
     this.store.load(dataset);
@@ -140,14 +147,12 @@ export class SyntheticEnvironmentService {
   }
 
   requireEnabled(): void {
+    // Guard against constructing/seedling without the demo flag. Dataset
+    // presence is deliberately NOT checked here: seedInvestigation() calls
+    // load() itself, and load() is what populates the store.
     if (!this.enabled) {
       throw new Error(
         `[${SYNTHETIC_WATERMARK}] Synthetic environment is disabled. Set CYBER_SYNTHETIC_ENABLED=1 to enable.`,
-      );
-    }
-    if (!this.store.isLoaded()) {
-      throw new Error(
-        `[${SYNTHETIC_WATERMARK}] No synthetic scenario loaded. Call load() first.`,
       );
     }
   }

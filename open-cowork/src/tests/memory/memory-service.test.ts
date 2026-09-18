@@ -248,6 +248,24 @@ function createDatabaseInstance(db: Database.Database): DatabaseInstance {
     prepare: (sql: string) => db.prepare(sql),
     exec: (sql: string) => db.exec(sql),
     pragma: (pragma: string) => db.pragma(pragma),
+    investigations: {
+      create: () => undefined,
+      update: () => undefined,
+      get: () => undefined,
+      getAll: () => [],
+      delete: () => undefined,
+    },
+    investigationEvents: {
+      create: () => undefined,
+      getByInvestigationId: () => [],
+      deleteByInvestigationId: () => undefined,
+    },
+    investigationSessionLinks: {
+      link: () => undefined,
+      getInvestigationIdBySessionId: () => null,
+      getSessionLinksByInvestigationId: () => [],
+      deleteBySessionId: () => undefined,
+    },
     close: () => db.close(),
   };
 }

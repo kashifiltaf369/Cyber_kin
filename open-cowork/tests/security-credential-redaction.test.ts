@@ -61,54 +61,64 @@ describe('THREAT-07: Credential redaction behavior', () => {
     });
   });
 
-  describe('DOCUMENTED GAPS: Patterns NOT redacted by current implementation', () => {
-    it('DOCUMENTS GAP 1: short AWS access key (20 chars, < 32 threshold) — kept as-is in string form', () => {
+  // REGRESSION GUARDS: each of these was once a documented leak ("DOCUMENTS
+  // GAP n"); the redaction implementation has since been hardened to close
+  // them. They now assert the CLOSED behavior so the gaps cannot silently
+  // reopen. (Recovery-era update; see report §E classification.)
+
+    it('CLOSED GAP 1: short AWS access key (20 chars) is redacted in string form', () => {
       const shortAwsAccessKey = 'AKIAIOSFODNN7EXAMPLE';
       expect(shortAwsAccessKey.length).toBeLessThan(32);
 
       const input = `AWS error accessing S3 with key ${shortAwsAccessKey}`;
       const output = redactCredential(input) as string;
-      expect(output).toContain(shortAwsAccessKey);
+      expect(output).not.toContain(shortAwsAccessKey);
+      expect(output).toContain(REDACTED_VALUE);
+      // Ordinary English words are not collateral damage of the redactor.
+      expect(output).toContain('accessing');
     });
 
-    it('DOCUMENTS GAP 1 (obj): short AWS key in generic object key "value" — key name not in filter + string < 32 chars', () => {
+    it('CLOSED GAP 1 (obj): short AWS key under generic object key "value" is redacted', () => {
       const input = {
         value: 'AKIAIOSFODNN7EXAMPLE',
         description: 'AWS access key from config',
       };
       const output = redactCredential(input) as Record<string, string>;
-      expect(output.value).toBe('AKIAIOSFODNN7EXAMPLE');
+      expect(output.value).toBe(REDACTED_VALUE);
+      expect(output.description).toBe('AWS access key from config');
     });
 
-    it('DOCUMENTS GAP 2: hyphenated Slack xoxb-* bot token — hyphens break base64 regex', () => {
+    it('CLOSED GAP 2: hyphenated Slack xoxb-* bot token is fully redacted', () => {
       const slackToken = 'xoxb-123456789012-ABCDEFGHIJKLMNOPQRSTUVWXYZ-abcdefghij0123456789';
       expect(slackToken).toContain('-');
 
       const input = `Slack API 401 for token ${slackToken}`;
       const output = redactCredential(input) as string;
 
-      const slackPartsNoHyphens = slackToken.split('-').filter((s) => s.length >= 32);
-      if (slackPartsNoHyphens.length > 0) {
-        for (const part of slackPartsNoHyphens) {
+      for (const part of slackToken.split('-')) {
+        if (part.length >= 12) {
           expect(output).not.toContain(part);
         }
       }
 
-      expect(output).toContain('xoxb');
+      // Single-wrapped redaction (no [[redacted]] double-wrap artifact).
+      expect(output).toContain(`token ${REDACTED_VALUE}`);
+      expect(output).not.toContain(`[[${REDACTED_VALUE}]]`);
     });
 
-    it('DOCUMENTS GAP 3: SHORT (< 32-char base64) Authorization: Basic tokens bypass both regexes', () => {
-      // Short Basic creds (e.g. user:p → base64 length 8) do NOT hit the 32+ base64 regex.
+    it('CLOSED GAP 3: SHORT (< 32-char base64) Authorization: Basic tokens are redacted by the scheme rule', () => {
+      // Short Basic creds (e.g. user:p → base64 length 8) bypass the length
+      // threshold but are caught by the Authorization-scheme rule.
       const shortBasic = 'Basic dXNlcjpw';
       expect(Buffer.from('dXNlcjpw', 'base64').toString()).toBe('user:p');
       const input = `header received: Authorization: ${shortBasic}`;
       const output = redactCredential(input) as string;
 
-      expect(output).not.toContain(`Basic ${REDACTED_VALUE}`);
-      expect(output).toContain('Basic dXNlcjpw');
+      expect(output).toContain(`Basic ${REDACTED_VALUE}`);
+      expect(output).not.toContain('dXNlcjpw');
     });
 
-    it('DOCUMENTS GAP 4: credential stored in generic object key "payload" / "body" / "data" — key names not in filter', () => {
+    it('CLOSED GAP 4: credentials under generic object keys "payload" / "body" / "data" are redacted', () => {
       const secret = 'sk_test_abcdefghijklmnopqrstuvwxyz0123456789ABCD';
       const input = {
         payload: secret,
@@ -118,13 +128,13 @@ describe('THREAT-07: Credential redaction behavior', () => {
       };
       const output = redactCredential(input) as Record<string, string>;
 
-      expect(output.payload).toBe(secret);
-      expect(output.body).toBe(secret);
-      expect(output.data).toBe(secret);
-      expect(output.value).toBe(secret);
+      expect(output.payload).toBe(REDACTED_VALUE);
+      expect(output.body).toBe(REDACTED_VALUE);
+      expect(output.data).toBe(REDACTED_VALUE);
+      expect(output.value).toBe(REDACTED_VALUE);
     });
 
-    it('DOCUMENTS GAP 4 nested: generic key "request.body" deep in object tree leaks', () => {
+    it('CLOSED GAP 4 nested: generic key "request.body" deep in the object tree is redacted', () => {
       const secret = 'SECRET-LONG-VALUE-AAAAAAAAAAAAAAAAAAAAAAAAAAA';
       const input = {
         request: {
@@ -136,9 +146,8 @@ describe('THREAT-07: Credential redaction behavior', () => {
       };
       const output = redactCredential(input) as Record<string, Record<string, unknown>>;
       const req = output.request as Record<string, string>;
-      expect(req.body).toBe(secret);
+      expect(req.body).toBe(REDACTED_VALUE);
     });
-  });
 
   describe('Error instances', () => {
     it('redacts message + stack on Error objects (without losing name)', () => {

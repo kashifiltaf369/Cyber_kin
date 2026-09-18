@@ -108,9 +108,8 @@ export function classifyCapabilityRisk(capability: Pick<CyberCapabilityDefinitio
   if (/inspect/.test(text)) {
     return 'ANALYSIS';
   }
-  if (capability.riskLevel === 'HIGH') {
-    return 'HIGH_RISK_ACTION';
-  }
+  // Fail closed: anything unmatched (including any remaining HIGH risk
+  // capability) is treated as a high-risk action and requires approval.
   return 'HIGH_RISK_ACTION';
 }
 

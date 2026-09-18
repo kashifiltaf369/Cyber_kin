@@ -5,6 +5,8 @@ import {
   InvestigationPlanner,
   ParallelTaskManager,
   TaskScheduler,
+  INVESTIGATION_AGENT_ROLES,
+  type InvestigationAgentRole,
   type InvestigationPlan,
   type InvestigationWorkerContext,
   type InvestigationWorkerExecutor,
@@ -13,6 +15,7 @@ import {
 import { InvestigationReplanner } from './investigation-replanner';
 import { validateWorkerResultShape } from './evidence-ingestion-service';
 import type { OperationalRationale } from '../../shared/cyber/investigation-types';
+import type { ApplyHumanInterruptionInput } from '../../shared/cyber/investigation-types';
 import { toOperationalRationale } from '../../shared/cyber/investigation-types';
 import { getAgentDefinition } from '../cyber/cyber-agent-definitions';
 import { validateAgentOutput } from '../cyber/cyber-agent-output-validator';
@@ -37,17 +40,54 @@ export interface RuntimeInvestigationOrchestratorOptions {
   maxRetries?: number;
   pollIntervalMs?: number;
   workerAllowedTools?: string[];
+  /**
+   * Returns the app's configured workspace directory for worker sessions.
+   * Workers must run in the user's workspace — never a hardcoded path and
+   * never a silent fallback to the process working directory. When this
+   * returns null/undefined, worker execution fails loudly instead.
+   */
+  getWorkspaceCwd?: () => string | null | undefined;
+}
+
+/** Batch-shaped human interruption payload after normalization/validation. */
+interface HumanInterruptionBatch {
+  instruction: string;
+  addContext?: string[];
+  addPriority?: string;
+  redirectInvestigationTo?: string;
+  ignoreEvidenceIds?: string[];
+  pauseTaskIds?: string[];
+  cancelTaskIds?: string[];
+  reprioritize?: Array<{ plannedTaskId: string; priority: number; rationale?: string }>;
+  redirectTasks?: Array<{ plannedTaskId: string; description?: string; role?: Parameters<ParallelTaskManager['redirectTask']>[1]['role'] }>;
+  createTasks?: Array<Parameters<ParallelTaskManager['createTask']>[0]>;
+  hypothesisUpdates?: Array<{ hypothesisId: string; confidence?: number; status?: 'OPEN' | 'SUPPORTED' | 'WEAKENED' | 'REJECTED'; statement?: string; title?: string }>;
+}
+
+const INVESTIGATION_AGENT_ROLES_SET: ReadonlySet<string> = new Set<string>(INVESTIGATION_AGENT_ROLES);
+
+function isInvestigationAgentRole(value: string): boolean {
+  return INVESTIGATION_AGENT_ROLES_SET.has(value);
 }
 
 export class RuntimeBackedInvestigationWorkerExecutor implements InvestigationWorkerExecutor {
   constructor(
     private readonly runtime: InvestigationSessionRuntime,
     private readonly investigationService: InvestigationService,
-    private readonly options: Pick<RuntimeInvestigationOrchestratorOptions, 'pollIntervalMs' | 'workerAllowedTools'> = {}
+    private readonly options: Pick<RuntimeInvestigationOrchestratorOptions, 'pollIntervalMs' | 'workerAllowedTools' | 'getWorkspaceCwd'> = {}
   ) {}
 
   async execute(context: InvestigationWorkerContext): Promise<InvestigationWorkerResult> {
-    const cwd = context.investigation.entities.length > 0 ? undefined : undefined;
+    // Workers always run inside the app's configured workspace. No hardcode,
+    // no silent repo-root fallback: if no workspace is configured, refuse to
+    // start the worker so the failure is visible to the operator.
+    const workspaceCwd = this.options.getWorkspaceCwd?.() ?? null;
+    if (!workspaceCwd) {
+      throw new Error(
+        `Investigation worker '${context.task.role}' cannot start: no workspace directory is configured. Set a working directory for the app before executing an investigation.`
+      );
+    }
+    const cwd = workspaceCwd;
     const prompt = buildWorkerPrompt(context);
     const agent = getAgentDefinition(context.task.role);
     const agentAllowedCapabilities = agent.allowedTools.capabilities;
@@ -159,20 +199,9 @@ export class RuntimeInvestigationOrchestrator {
 
   applyHumanInterruption(
     investigationId: string,
-    input: {
-      instruction: string;
-      addContext?: string[];
-      addPriority?: string;
-      redirectInvestigationTo?: string;
-      ignoreEvidenceIds?: string[];
-      pauseTaskIds?: string[];
-      cancelTaskIds?: string[];
-      reprioritize?: Array<{ plannedTaskId: string; priority: number; rationale?: string }>;
-      redirectTasks?: Array<{ plannedTaskId: string; description?: string; role?: Parameters<ParallelTaskManager['redirectTask']>[1]['role'] }>;
-      createTasks?: Array<Parameters<ParallelTaskManager['createTask']>[0]>;
-      hypothesisUpdates?: Array<{ hypothesisId: string; confidence?: number; status?: 'OPEN' | 'SUPPORTED' | 'WEAKENED' | 'REJECTED'; statement?: string; title?: string }>;
-    }
+    rawInput: ApplyHumanInterruptionInput
   ): { investigationId: string; updatedInvestigation: ReturnType<InvestigationService['get']>; operationalSummary: string } {
+    const input = this.normalizeHumanInterruption(investigationId, rawInput);
     this.investigationService.addHumanInput(investigationId, input.instruction);
     for (const context of input.addContext || []) {
       this.investigationService.addNote(investigationId, context);
@@ -250,6 +279,138 @@ export class RuntimeInvestigationOrchestrator {
 
   redirectTask(plannedTaskId: string, updates: { description?: string; role?: Parameters<ParallelTaskManager['redirectTask']>[1]['role'] }): void {
     this.taskManager.redirectTask(plannedTaskId, updates);
+  }
+
+  /**
+   * Accepts both interruption payload shapes — the legacy batch form and the
+   * single-action (kind-based) form sent by the workspace UI — validates it,
+   * and reduces it to the batch form the orchestrator executes. Throws on
+   * invalid input instead of silently coercing it.
+   */
+  private normalizeHumanInterruption(
+    investigationId: string,
+    raw: ApplyHumanInterruptionInput
+  ): HumanInterruptionBatch {
+    const trimText = (value: unknown): string => (typeof value === 'string' ? value.trim() : '');
+
+    // Single-action (kind-based) shape from the workspace UI.
+    if (typeof raw.kind === 'string' && raw.kind.length > 0) {
+      const value = trimText(raw.value);
+      const title = trimText(raw.title);
+      const statement = trimText(raw.statement);
+      const hypothesisId = trimText(raw.hypothesisId);
+
+      switch (raw.kind) {
+        case 'directive':
+        case 'direction': {
+          if (!value) throw new Error('Directive text is required');
+          // 'direction' is an investigative redirect: it appends to
+          // investigationDirections and marks the plan for replanning.
+          if (raw.kind === 'direction') {
+            this.investigationService.redirectInvestigation(investigationId, value);
+          }
+          return { instruction: value };
+        }
+        case 'note': {
+          if (!value) throw new Error('Note text is required');
+          return { instruction: value, addContext: [value] };
+        }
+        case 'suspicion': {
+          if (!value) throw new Error('Suspicion text is required');
+          this.investigationService.addHumanContext(investigationId, { suspicions: [value] });
+          return { instruction: `Suspicion: ${value}` };
+        }
+        case 'constraint': {
+          if (!value) throw new Error('Constraint text is required');
+          this.investigationService.addConstraint(investigationId, value);
+          return { instruction: `Constraint: ${value}` };
+        }
+        case 'hypothesis': {
+          const hypothesisTitle = title || statement.slice(0, 80);
+          const hypothesisStatement = statement || title;
+          if (!hypothesisTitle || !hypothesisStatement) throw new Error('Hypothesis title and statement are required');
+          this.investigationService.addHypothesis(investigationId, {
+            title: hypothesisTitle,
+            statement: hypothesisStatement,
+            createdBy: 'human',
+          });
+          return { instruction: `Added hypothesis: ${hypothesisTitle}` };
+        }
+        case 'promote_hypothesis': {
+          if (!hypothesisId) throw new Error('hypothesisId is required to promote a hypothesis');
+          this.investigationService.promoteHypothesis(investigationId, hypothesisId);
+          return { instruction: `Promoted hypothesis ${hypothesisId}` };
+        }
+        case 'reject_hypothesis': {
+          if (!hypothesisId) throw new Error('hypothesisId is required to reject a hypothesis');
+          this.investigationService.rejectHypothesis(investigationId, hypothesisId);
+          return { instruction: `Rejected hypothesis ${hypothesisId}` };
+        }
+        case 'risk_tolerance': {
+          if (value !== 'LOW' && value !== 'MEDIUM' && value !== 'HIGH') {
+            throw new Error('Risk tolerance must be LOW, MEDIUM, or HIGH');
+          }
+          this.investigationService.addHumanContext(investigationId, { riskTolerance: value });
+          return { instruction: `Set risk tolerance to ${value}` };
+        }
+        case 'reject_replan': {
+          // Recorded as a human input; the actual plan decision is made by
+          // the caller through investigation.plan / investigation.execute.
+          if (!value && !statement) throw new Error('Rejection rationale is required');
+          return { instruction: `Rejected replan recommendation: ${value || statement}` };
+        }
+        default:
+          throw new Error(`Unsupported human interruption kind: ${raw.kind}`);
+      }
+    }
+
+    // Legacy batch shape.
+    const instruction = trimText(raw.instruction);
+    if (!instruction) throw new Error('Human interruption instruction is required');
+
+    const redirectTasks = (raw.redirectTasks || []).map((item) => {
+      const plannedTaskId = trimText(item.plannedTaskId);
+      if (!plannedTaskId) throw new Error('redirectTasks entries require plannedTaskId');
+      const role = trimText(item.role);
+      if (role && !isInvestigationAgentRole(role)) {
+        throw new Error(`Unknown investigator role: ${role}`);
+      }
+      return {
+        plannedTaskId,
+        description: typeof item.description === 'string' ? item.description : undefined,
+        role: (role || undefined) as InvestigationAgentRole | undefined,
+      };
+    });
+
+    const createTasks = (raw.createTasks || []).map((task) => {
+      if (!trimText(task.id) || !trimText(task.title)) {
+        throw new Error('createTasks entries require id and title');
+      }
+      const role = trimText(task.role);
+      if (role && !isInvestigationAgentRole(role)) {
+        throw new Error(`Unknown investigator role: ${role}`);
+      }
+      return {
+        ...task,
+        dependsOn: task.dependsOn ?? [],
+        canRunConcurrently: task.canRunConcurrently ?? true,
+        role: (role || 'Evidence Analyst') as InvestigationAgentRole,
+      };
+    });
+
+    return {
+      instruction,
+      addContext: raw.addContext,
+      addPriority: raw.addPriority,
+      redirectInvestigationTo: raw.redirectInvestigationTo,
+      ignoreEvidenceIds: raw.ignoreEvidenceIds,
+      pauseTaskIds: raw.pauseTaskIds,
+      cancelTaskIds: raw.cancelTaskIds,
+      reprioritize: raw.reprioritize,
+      redirectTasks: redirectTasks.length > 0 ? redirectTasks : undefined,
+      createTasks: createTasks.length > 0 ? createTasks : undefined,
+      hypothesisUpdates: raw.hypothesisUpdates,
+    };
   }
 }
 

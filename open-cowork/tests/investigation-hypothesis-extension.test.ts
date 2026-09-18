@@ -126,19 +126,13 @@ describe('InvestigationHypothesisExtension', () => {
     expect(result.customTools).toHaveLength(1);
 
     const tool = result.customTools?.[0];
-    const comparison = await tool?.execute('call-1', { queryType: 'compare' }, undefined as never, undefined as never, {
-      sessionId: 'session-1',
-    });
+    const comparison = await tool?.execute('call-1', { queryType: 'compare' }, undefined as never, undefined as never, { sessionManager: { getSessionId: () => 'session-1' } });
     expect(textFrom(comparison)).toContain('leadingHypothesisId');
 
-    const challenge = await tool?.execute('call-2', { queryType: 'challenge', hypothesisId: theftId }, undefined as never, undefined as never, {
-      sessionId: 'session-1',
-    });
+    const challenge = await tool?.execute('call-2', { queryType: 'challenge', hypothesisId: theftId }, undefined as never, undefined as never, { sessionManager: { getSessionId: () => 'session-1' } });
     expect(textFrom(challenge)).toContain('contradictoryEvidence');
 
-    const list = await tool?.execute('call-3', { queryType: 'list' }, undefined as never, undefined as never, {
-      sessionId: 'session-1',
-    });
+    const list = await tool?.execute('call-3', { queryType: 'list' }, undefined as never, undefined as never, { sessionManager: { getSessionId: () => 'session-1' } });
     expect(textFrom(list)).toContain('Credential theft');
   });
 

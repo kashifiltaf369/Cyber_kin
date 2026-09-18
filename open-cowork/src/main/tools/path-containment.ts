@@ -64,7 +64,7 @@ function canonicalizePath(pathValue: string, caseInsensitive: boolean): Canonica
     return null;
   }
 
-  let working = decodePathDefense(pathValue);
+  const working = decodePathDefense(pathValue);
 
   if (working.includes('\x00')) {
     return null;

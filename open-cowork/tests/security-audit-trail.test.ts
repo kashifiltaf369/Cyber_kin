@@ -3,12 +3,17 @@
  *
  * Maps to SECURITY_THREAT_MODEL.md THREAT-16 (Audit log tampering) — CRITICAL severity.
  *
- * Scope: Verify current behavior of CyberActionAuditTrail including documented gaps:
- *   - Shallow Object.freeze (nested objects remain mutable)
- *   - In-memory array without append-only structural guarantees
- *   - No hash chain or MAC for integrity verification
+ * Scope: Verify current behavior of CyberActionAuditTrail:
+ *   - Deep Object.freeze at append time (nested objects immutable)
+ *   - list()/getByInvestigationId() return deep clones (caller mutations
+ *     cannot reach trail state)
+ *   - Known remaining limitation: in-memory only, no hash chain / MAC and no
+ *     durable append-only file (records are mirrored into the linked
+ *     investigation's persisted event log instead)
  *
- * These tests DOCUMENT actual behavior; they do NOT patch or weaken controls.
+ * Historic "DOCUMENTS GAP" entries have been updated to CLOSED GAP regression
+ * guards after the implementation hardened. The integrity-chain limitation
+ * remains documented as a gap.
  */
 
 import { describe, it, expect } from 'vitest';
@@ -99,7 +104,7 @@ describe('THREAT-16: CyberActionAuditTrail tamper resistance', () => {
       expect(record.approvalState).toBe('NOT_REQUIRED');
     });
 
-    it('DOCUMENTS GAP: nested "parameters" object is NOT deeply frozen (shallow freeze only)', () => {
+    it('CLOSED GAP: nested "parameters" object IS deeply frozen (mutation rejected)', () => {
       const trail = new CyberActionAuditTrail();
       const record = makeAuditRecord(trail);
 
@@ -112,12 +117,12 @@ describe('THREAT-16: CyberActionAuditTrail tamper resistance', () => {
         threw = true;
       }
 
-      expect(threw).toBe(false);
-      expect(JSON.stringify(record.parameters)).not.toBe(before);
-      expect(((record as unknown) as { parameters: Record<string, unknown> }).parameters.newField).toBe('INJECTED');
+      expect(threw).toBe(true);
+      expect(JSON.stringify(record.parameters)).toBe(before);
+      expect(Object.isFrozen((record as unknown as { parameters: Record<string, unknown> }).parameters)).toBe(true);
     });
 
-    it('DOCUMENTS GAP: "result.details" nested object is NOT deeply frozen', () => {
+    it('CLOSED GAP: "result.details" nested object IS deeply frozen', () => {
       const trail = new CyberActionAuditTrail();
       const record = makeAuditRecord(trail);
 
@@ -134,12 +139,11 @@ describe('THREAT-16: CyberActionAuditTrail tamper resistance', () => {
         threw = true;
       }
 
-      expect(threw).toBe(false);
-      expect((record.result.details as Record<string, unknown>).sha256).toBe('TAMPERED-SHA');
-      expect((record.result.details as Record<string, unknown>).fakeEvidence).toBe('planted');
+      expect(threw).toBe(true);
+      expect((record.result.details as Record<string, unknown>).sha256).toBe('deadbeefcafebabe');
     });
 
-    it('DOCUMENTS GAP: arbitrary nested objects in audit input parameters survive shallow freeze and remain mutable', () => {
+    it('CLOSED GAP: arbitrary nested objects in audit input parameters are frozen (immutable after audit)', () => {
       const trail = new CyberActionAuditTrail();
       const record = makeAuditRecord(trail);
 
@@ -153,8 +157,8 @@ describe('THREAT-16: CyberActionAuditTrail tamper resistance', () => {
         threw = true;
       }
 
-      expect(threw).toBe(false);
-      expect(nested.inner.secret).toBe('OVERWRITTEN-AFTER-AUDIT');
+      expect(threw).toBe(true);
+      expect(nested.inner.secret).toBe('SHOULD-NOT-BE-MUTABLE-IF-DEEP-FREEZE');
     });
   });
 
@@ -175,7 +179,7 @@ describe('THREAT-16: CyberActionAuditTrail tamper resistance', () => {
       expect(listB).toHaveLength(2);
     });
 
-    it('DOCUMENTS GAP: shallow-copy array shares the same record object references; mutating nested details through list() affects trail state', () => {
+    it('CLOSED GAP: list() returns deep clones — mutating nested details through list() does NOT affect trail state', () => {
       const trail = new CyberActionAuditTrail();
       makeAuditRecord(trail);
 
@@ -184,7 +188,7 @@ describe('THREAT-16: CyberActionAuditTrail tamper resistance', () => {
       details.sha256 = 'ALTERED-VIA-LIST-COPY';
 
       const freshList = trail.list();
-      expect((freshList[0].result.details as Record<string, unknown>).sha256).toBe('ALTERED-VIA-LIST-COPY');
+      expect((freshList[0].result.details as Record<string, unknown>).sha256).toBe('deadbeefcafebabe');
     });
   });
 

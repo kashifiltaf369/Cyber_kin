@@ -31,7 +31,9 @@ import { InvestigationHypothesisExtension } from './investigation/investigation-
 import { InvestigationReplanExtension } from './investigation/investigation-replan-extension';
 import { InvestigationCyberAuditExtension } from './investigation/investigation-cyber-audit-extension';
 import { RuntimeInvestigationOrchestrator } from './investigation/runtime-investigation-orchestrator';
+import { INVESTIGATION_AGENT_ROLES, type InvestigationAgentRole } from './investigation/parallel-investigation-engine';
 import { SyntheticEnvironmentService, isSyntheticEnvironmentEnabled } from './integrations/synthetic/synthetic-environment-service';
+import type { ScenarioId } from './integrations/synthetic/scenario-types';
 import { CyberCapabilityRegistry } from './cyber/cyber-capability-registry';
 import { CyberCapabilityExtension } from './cyber/cyber-capability-extension';
 import { CyberActionAuditTrail, type CyberActionAuditRecord } from './cyber/cyber-permission-policy';
@@ -149,6 +151,15 @@ let investigationOrchestrator: RuntimeInvestigationOrchestrator | null = null;
 let syntheticEnvironmentService: SyntheticEnvironmentService | null = null;
 
 /**
+ * In-memory cyber action audit trail, shared by every session (GUI and
+ * headless). Declared at module scope so both execution paths reference the
+ * same instance and neither can touch it before initialization. Records are
+ * additionally mirrored into the linked investigation's persisted event log
+ * (see the `onAuditRecord` wiring below).
+ */
+const cyberActionAuditTrail = new CyberActionAuditTrail();
+
+/**
  * Tool names that a spawned subagent may never invoke, regardless of what
  * `decidePermission` returns. Subagents run non-interactively — there is no
  * user present to answer a permission prompt — so for tools whose whole
@@ -175,7 +186,33 @@ function resolveSubagentToolPermission(
     return 'deny';
   }
   const decision = decidePermission('subagent', toolName, toolInput);
-  return decision === 'deny' ? 'deny' : 'allow';
+  // Fail closed: 'ask' requires a human, and no human is present in a
+  // subagent context — silently upgrading 'ask' to 'allow' is forbidden.
+  return decision === 'allow' ? 'allow' : 'deny';
+}
+
+/**
+ * Resolve the permission decision for a cyber capability executed from an
+ * interactive (GUI) session. Honors the full allow/deny/ask rule matrix:
+ * `ask` surfaces the real interactive permission prompt through the
+ * SessionManager (60s timeout resolves to deny). `ask` is never silently
+ * upgraded to `allow`.
+ */
+async function resolveInteractiveCyberCapabilityPermission(
+  sessionId: string,
+  capabilityName: string,
+  input: Record<string, unknown>
+): Promise<'allow' | 'deny'> {
+  const toolName = `cyber:${capabilityName}`;
+  const decision = decidePermission(sessionId, toolName, input);
+  if (decision === 'allow') return 'allow';
+  if (decision === 'deny') return 'deny';
+  if (!sessionManager) {
+    return 'deny';
+  }
+  const toolUseId = `cyber-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+  const result = await sessionManager.requestPermission(sessionId, toolUseId, toolName, input);
+  return result === 'allow' ? 'allow' : 'deny';
 }
 
 function sanitizeDiagnosticBaseUrl(value: string | undefined): string | null {
@@ -1012,8 +1049,10 @@ app
           sessionLookup: (sessionId: string) =>
             investigationService?.getInvestigationIdBySessionId(sessionId) || null,
           allowedRiskLevels: ['LOW', 'MEDIUM'],
-          permissionResolver: (capability, input) =>
-            resolveSubagentToolPermission(`cyber:${capability.name}`, {
+          // Interactive (GUI) session: 'ask' rules surface the real
+          // permission prompt instead of silently executing.
+          permissionResolver: (capability, input, { sessionId }) =>
+            resolveInteractiveCyberCapabilityPermission(sessionId, capability.name, {
               capability: capability.name,
               permissionsRequired: capability.permissionsRequired,
               input,
@@ -1398,7 +1437,6 @@ app
     investigationService = new InvestigationService(db, sendToRenderer);
     memoryService = new MemoryService(db);
     const cyberCapabilityRegistry = new CyberCapabilityRegistry();
-    const cyberActionAuditTrail = new CyberActionAuditTrail();
     const extensionManager = new AgentRuntimeExtensionManager([
       new MemoryExtension(memoryService),
       new ConfigExtension(configStore),
@@ -1463,7 +1501,9 @@ app
     // Initialize session manager before creating an interactive window.
     // This avoids session.start racing the startup path and hitting a null manager.
     sessionManager = new SessionManager(db, sendToRenderer, pluginRuntimeService, extensionManager);
-    investigationOrchestrator = new RuntimeInvestigationOrchestrator(investigationService, sessionManager);
+    investigationOrchestrator = new RuntimeInvestigationOrchestrator(investigationService, sessionManager, undefined, {
+      getWorkspaceCwd: () => currentWorkingDir,
+    });
     syntheticEnvironmentService = new SyntheticEnvironmentService(investigationService, { enabled: isSyntheticEnvironmentEnabled() });
     skillsManager = new SkillsManager(db, {
       getConfiguredGlobalSkillsPath: () => configStore.get('globalSkillsPath') || '',
@@ -3487,9 +3527,15 @@ async function handleClientEvent(event: ClientEvent): Promise<unknown> {
 
     case 'investigation.redirectTask': {
       if (!investigationOrchestrator) throw new Error('Investigation orchestrator not initialized');
+      // Runtime role validation: the renderer is not trusted to send arbitrary
+      // role strings straight into the task manager.
+      const requestedRole = event.payload.role;
+      if (requestedRole !== undefined && !INVESTIGATION_AGENT_ROLES.includes(requestedRole as InvestigationAgentRole)) {
+        throw new Error(`Unknown investigator role: ${requestedRole}`);
+      }
       investigationOrchestrator.redirectTask(event.payload.plannedTaskId, {
         description: event.payload.description,
-        role: event.payload.role,
+        role: requestedRole as InvestigationAgentRole | undefined,
       });
       return { success: true };
     }
@@ -3675,7 +3721,7 @@ async function handleClientEvent(event: ClientEvent): Promise<unknown> {
 
     case 'synthetic.loadScenario': {
       if (!syntheticEnvironmentService) throw new Error('Synthetic environment service not initialized');
-      const dataset = syntheticEnvironmentService.load(event.payload.scenarioId as never);
+      const dataset = syntheticEnvironmentService.load(event.payload.scenarioId as ScenarioId);
       return {
         scenarioId: dataset.scenarioId,
         objective: dataset.objective,
@@ -3693,7 +3739,7 @@ async function handleClientEvent(event: ClientEvent): Promise<unknown> {
       if (!syntheticEnvironmentService || !investigationService) {
         throw new Error('Synthetic environment service not initialized');
       }
-      const investigation = syntheticEnvironmentService.seedInvestigation(event.payload.scenarioId as never);
+      const investigation = syntheticEnvironmentService.seedInvestigation(event.payload.scenarioId as ScenarioId);
       sendToRenderer({ type: 'investigation.updated', payload: { investigation } });
       sendToRenderer({ type: 'investigation.list', payload: { investigations: investigationService.list() } });
       return investigation;

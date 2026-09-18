@@ -223,11 +223,11 @@ describe('logger context (AsyncLocalStorage)', () => {
     expect(timingLine).toContain('[tid:tim12345]');
   });
 
-  it('generateTraceId returns 8-character hex string', async () => {
+  it('generateTraceId returns a 16-character hex string (trace envelope, distinct from log tokens)', async () => {
     const logger = await import('../src/main/utils/logger');
     const traceId = logger.generateTraceId();
-    expect(traceId).toHaveLength(8);
-    expect(traceId).toMatch(/^[0-9a-f]{8}$/);
+    expect(traceId).toHaveLength(16);
+    expect(traceId).toMatch(/^[0-9a-f]{16}$/);
     logger.closeLogFile();
   });
 

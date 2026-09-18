@@ -540,10 +540,12 @@ function ensureColumn(
 /**
  * Initialize the database
  */
-export function initDatabase(): DatabaseInstance {
+export function initDatabase(options: { dbPath?: string } = {}): DatabaseInstance {
   if (db) return db;
 
-  const dbPath = getDatabasePath();
+  // Tests inject ':memory:' (or a temp file) directly; the app resolves the
+  // per-user data directory.
+  const dbPath = options.dbPath ?? getDatabasePath();
   log('[Database] Opening database at:', dbPath);
 
   let rawDb: Database.Database;

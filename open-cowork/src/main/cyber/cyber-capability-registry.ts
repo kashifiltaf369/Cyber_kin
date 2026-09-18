@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
-import { existsSync, readFileSync, statSync, readdirSync } from 'node:fs';
+import { existsSync, readFileSync, statSync, readdirSync, realpathSync } from 'node:fs';
+import { isPathWithinRoot } from '../tools/path-containment';
 import path from 'node:path';
 
 export type CyberCapabilityName =
@@ -38,7 +39,36 @@ export interface CyberCapabilityDefinition<Input = unknown, Output = unknown> {
 
 export interface CyberCapabilityExecutionContext {
   adapterPreference?: string;
+  /** Absolute workspace root every filesystem input must stay inside. */
   workspacePath?: string;
+}
+
+/** Capability input keys that name filesystem paths. */
+const FILESYSTEM_INPUT_KEYS: readonly string[] = ['filePath', 'directoryPath', 'sourcePath'];
+
+/**
+ * Walk limits for query_local_logs: bounded by default (depth 6, 500 files)
+ * and hard-capped so caller-supplied values cannot demand an unbounded scan.
+ */
+export interface CyberWalkLimits {
+  maxDepth: number;
+  maxFiles: number;
+}
+
+const DEFAULT_WALK_LIMITS: CyberWalkLimits = { maxDepth: 6, maxFiles: 500 };
+const HARD_WALK_LIMITS: CyberWalkLimits = { maxDepth: 12, maxFiles: 2000 };
+
+export function clampWalkLimits(limits?: Partial<CyberWalkLimits>): CyberWalkLimits {
+  return {
+    maxDepth: Math.min(
+      Math.max(1, Math.floor(limits?.maxDepth ?? DEFAULT_WALK_LIMITS.maxDepth)),
+      HARD_WALK_LIMITS.maxDepth
+    ),
+    maxFiles: Math.min(
+      Math.max(1, Math.floor(limits?.maxFiles ?? DEFAULT_WALK_LIMITS.maxFiles)),
+      HARD_WALK_LIMITS.maxFiles
+    ),
+  };
 }
 
 export interface CyberCapabilityDiscoveryResult {
@@ -165,6 +195,10 @@ export interface LocalLogsInput {
   query?: string;
   extensions?: string[];
   limit?: number;
+  /** Directory traversal depth bound (default 6, hard cap 12). */
+  maxDepth?: number;
+  /** Maximum number of files considered (default 500, hard cap 2000). */
+  maxFiles?: number;
 }
 
 export interface LocalLogsOutput {
@@ -184,16 +218,21 @@ export class CyberCapabilityRegistry {
     return Array.from(this.definitions.values());
   }
 
-  get(name: CyberCapabilityName): CyberCapabilityDefinition | null {
-    return this.definitions.get(name) || null;
+  /**
+   * Look up a capability by name. Accepts dynamically registered names in
+   * addition to the built-in `CyberCapabilityName` union, because `register`
+   * supports arbitrary capabilities at runtime.
+   */
+  get(name: CyberCapabilityName | string): CyberCapabilityDefinition | null {
+    return this.definitions.get(name as CyberCapabilityName) || null;
   }
 
   register(definition: CyberCapabilityDefinition): void {
     this.definitions.set(definition.name, definition);
   }
 
-  unregister(name: CyberCapabilityName): boolean {
-    return this.definitions.delete(name);
+  unregister(name: CyberCapabilityName | string): boolean {
+    return this.definitions.delete(name as CyberCapabilityName);
   }
 
   clear(): void {
@@ -277,7 +316,85 @@ export class CyberCapabilityRegistry {
     if (!capability) {
       throw new Error(`Unknown capability: ${name}`);
     }
+    this.enforceFilesystemContainment(name, input, ctx);
     return capability.executor(input, ctx);
+  }
+
+  /**
+   * S1 filesystem containment (normalize -> resolve -> contain -> reject):
+   * every capability input that names a filesystem path must stay inside the
+   * session workspace. Capabilities that need filesystem access are refused
+   * outright when no workspace path is available — there is no fallback.
+   */
+  private enforceFilesystemContainment(
+    name: CyberCapabilityName,
+    input: unknown,
+    ctx?: CyberCapabilityExecutionContext
+  ): void {
+    if (!input || typeof input !== 'object') return;
+    const record = input as Record<string, unknown>;
+    const workspacePath = ctx?.workspacePath;
+    for (const key of FILESYSTEM_INPUT_KEYS) {
+      const value = record[key];
+      if (typeof value !== 'string' || value.length === 0) continue;
+      if (!workspacePath) {
+        throw new Error(
+          `[cyber] ${name} refused: capability requires filesystem access ("${key}") but no workspace path is available for containment.`
+        );
+      }
+      if (!isPathWithinRoot(value, workspacePath)) {
+        throw new Error(
+          `[cyber] ${name} refused: path "${value}" is outside the session workspace (${workspacePath}).`
+        );
+      }
+      // Lexical containment passes for symlink chains that point outside the
+      // workspace — verify the real on-disk location too.
+      this.enforceRealPathContainment(name, value, workspacePath);
+    }
+  }
+
+  /**
+   * Resolves the deepest existing ancestor of `value` to its real location
+   * (following symlinks) and refuses when it escapes the workspace. For a
+   * non-existent path the nearest existing parent is checked, so a symlinked
+   * directory component cannot smuggle later reads/writes out either.
+   */
+  private enforceRealPathContainment(
+    name: CyberCapabilityName,
+    value: string,
+    workspacePath: string
+  ): void {
+    let realWorkspace: string;
+    try {
+      realWorkspace = realpathSync(workspacePath);
+    } catch {
+      throw new Error(
+        `[cyber] ${name} refused: workspace path "${workspacePath}" could not be resolved for containment.`
+      );
+    }
+
+    let cursor = value;
+    for (let hops = 0; hops < 16; hops++) {
+      if (existsSync(cursor)) {
+        let realPath: string;
+        try {
+          realPath = realpathSync(cursor);
+        } catch {
+          throw new Error(
+            `[cyber] ${name} refused: path "${value}" could not be resolved for containment.`
+          );
+        }
+        if (!isPathWithinRoot(realPath, realWorkspace)) {
+          throw new Error(
+            `[cyber] ${name} refused: path "${value}" resolves (symlink) to "${realPath}", outside the session workspace (${workspacePath}).`
+          );
+        }
+        return;
+      }
+      const parent = path.dirname(cursor);
+      if (parent === cursor) return;
+      cursor = parent;
+    }
   }
 }
 
@@ -626,7 +743,8 @@ async function queryLocalLogs(input: LocalLogsInput): Promise<LocalLogsOutput> {
     throw new Error(`Directory not found: ${input.directoryPath}`);
   }
   const extensions = new Set((input.extensions || ['.log', '.txt', '.json', '.evtx.txt']).map((item) => item.toLowerCase()));
-  const files = walkFiles(input.directoryPath).filter(
+  const walkLimits = clampWalkLimits({ maxDepth: input.maxDepth, maxFiles: input.maxFiles });
+  const files = walkFiles(input.directoryPath, walkLimits).filter(
     (file) => extensions.size === 0 || extensions.has(path.extname(file).toLowerCase())
   );
   const results: LocalLogsOutput['files'] = [];
@@ -641,12 +759,17 @@ async function queryLocalLogs(input: LocalLogsInput): Promise<LocalLogsOutput> {
   return { files: results };
 }
 
-function walkFiles(dir: string): string[] {
+function walkFiles(dir: string, limits: CyberWalkLimits, depth = 0): string[] {
   const results: string[] = [];
+  if (depth >= limits.maxDepth || results.length >= limits.maxFiles) return results;
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    if (results.length >= limits.maxFiles) break;
     const full = path.join(dir, entry.name);
+    // Never follow symbolic links: they can point outside the workspace or
+    // create cycles that would defeat the depth bound.
+    if (entry.isSymbolicLink()) continue;
     if (entry.isDirectory()) {
-      results.push(...walkFiles(full));
+      results.push(...walkFiles(full, limits, depth + 1));
     } else {
       results.push(full);
     }

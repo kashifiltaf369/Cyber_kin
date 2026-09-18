@@ -1,12 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import {
-  Activity,
-  ChevronLeft,
-} from 'lucide-react';
+import { ChevronLeft } from 'lucide-react';
 import type {
+  Investigation,
+  InvestigationEvent,
   InvestigationTask,
 } from '../../../shared/cyber/investigation-types';
-import type { PlannedInvestigationTask } from '../../../main/investigation/parallel-investigation-engine';
+import type { InvestigationPlan, PlannedInvestigationTask } from '../../../main/investigation/parallel-investigation-engine';
 import { useAppStore } from '../../store';
 import { useIPC } from '../../hooks/useIPC';
 import {
@@ -15,6 +14,7 @@ import {
   useActiveInvestigationPlan,
   useActiveInvestigationRecommendation,
 } from '../../store/selectors';
+import { InvestigationsList } from './InvestigationsList';
 import { InvestigationHeader } from './InvestigationHeader';
 import { AITeamPanel } from './AITeamPanel';
 import { HumanContextPanel } from './HumanContextPanel';
@@ -59,29 +59,59 @@ export function InvestigationWorkspace() {
     setSelectedEvidenceId(null);
   }, [activeInvestigationId]);
 
-  if (!investigation) {
-    return (
-      <div
-        className="flex-1 min-h-0 flex items-center justify-center"
-        style={{ background: 'var(--soc-bg-canvas)', color: 'var(--soc-text-muted)' }}
-      >
-        <div className="flex flex-col items-center gap-2 text-center px-6">
-          <Activity className="w-6 h-6" />
-          <div className="text-[13px]">No investigation selected</div>
-          <button
-            onClick={() => setActiveInvestigation(null)}
-            className="text-[12px] underline"
-            style={{ color: 'var(--soc-text-secondary)' }}
-          >
-            Back
-          </button>
-        </div>
-      </div>
-    );
-  }
+  // Load the execution plan + pending replan recommendation for the active
+  // investigation so header stats and the approve/reject controls are live.
+  useEffect(() => {
+    if (!activeInvestigationId) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const planResult = await invoke<InvestigationPlan | null>({
+          type: 'investigation.plan',
+          payload: { investigationId: activeInvestigationId },
+        });
+        if (!cancelled && planResult) {
+          useAppStore.getState().setActiveInvestigationPlan(planResult);
+        }
+        const recommendation = await invoke<InvestigationEvent | null>({
+          type: 'investigation.getLatestReplanRecommendation',
+          payload: { investigationId: activeInvestigationId },
+        });
+        if (!cancelled) {
+          useAppStore.getState().setActiveInvestigationRecommendation(recommendation ?? null);
+        }
+      } catch {
+        // Plan/recommendation endpoints are best-effort; the workspace still
+        // renders from the investigation record itself.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [activeInvestigationId, invoke]);
+
+  const openInvestigation = useCallback(
+    (id: string) => {
+      void (async () => {
+        try {
+          const opened = await invoke<Investigation | null>({
+            type: 'investigation.open',
+            payload: { investigationId: id },
+          });
+          if (opened) {
+            useAppStore.getState().upsertInvestigation(opened);
+          }
+        } finally {
+          setActiveInvestigation(id);
+        }
+      })();
+    },
+    [invoke, setActiveInvestigation]
+  );
 
   const onSendCommand = useCallback(
     (kind: CommandKind, payload: string) => {
+      if (!investigation) return;
       switch (kind) {
         case 'pause_all':
           send({ type: 'session.stop', payload: { sessionId: '' } });
@@ -118,7 +148,7 @@ export function InvestigationWorkspace() {
               kind: 'hypothesis',
               title: payload,
               statement: payload,
-            } as any,
+            },
           });
           break;
         case 'add_suspicion':
@@ -128,7 +158,7 @@ export function InvestigationWorkspace() {
               investigationId: investigation.id,
               kind: 'suspicion',
               value: payload,
-            } as any,
+            },
           });
           break;
         case 'add_constraint':
@@ -138,7 +168,7 @@ export function InvestigationWorkspace() {
               investigationId: investigation.id,
               kind: 'constraint',
               value: payload,
-            } as any,
+            },
           });
           break;
         case 'note':
@@ -148,7 +178,7 @@ export function InvestigationWorkspace() {
               investigationId: investigation.id,
               kind: 'note',
               value: payload,
-            } as any,
+            },
           });
           break;
         case 'message':
@@ -158,13 +188,26 @@ export function InvestigationWorkspace() {
               investigationId: investigation.id,
               kind: 'directive',
               value: payload,
-            } as any,
+            },
           });
           break;
       }
     },
     [investigation, invoke, send]
   );
+
+  // All hooks have run — the list view is rendered when no investigation is
+  // active. (Early returns must come after every hook call.)
+  if (!investigation) {
+    return (
+      <div
+        className="flex-1 min-h-0 flex flex-col"
+        style={{ background: 'var(--soc-bg-canvas)' }}
+      >
+        <InvestigationsList onSelect={openInvestigation} />
+      </div>
+    );
+  }
 
   const onPauseTask = (taskId: string) =>
     invoke<{ success: boolean }>({
@@ -194,27 +237,27 @@ export function InvestigationWorkspace() {
   const onAddHypothesis = (title: string, statement: string) =>
     invoke({
       type: 'investigation.applyHumanInterruption',
-      payload: { investigationId: investigation.id, kind: 'hypothesis', title, statement } as any,
+      payload: { investigationId: investigation.id, kind: 'hypothesis', title, statement },
     });
   const onPromoteHypothesis = (id: string) =>
     invoke({
       type: 'investigation.applyHumanInterruption',
-      payload: { investigationId: investigation.id, kind: 'promote_hypothesis', hypothesisId: id } as any,
+      payload: { investigationId: investigation.id, kind: 'promote_hypothesis', hypothesisId: id },
     });
   const onRejectHypothesis = (id: string) =>
     invoke({
       type: 'investigation.applyHumanInterruption',
-      payload: { investigationId: investigation.id, kind: 'reject_hypothesis', hypothesisId: id } as any,
+      payload: { investigationId: investigation.id, kind: 'reject_hypothesis', hypothesisId: id },
     });
   const onSetRiskTolerance = (level: 'LOW' | 'MEDIUM' | 'HIGH') =>
     invoke({
       type: 'investigation.applyHumanInterruption',
-      payload: { investigationId: investigation.id, kind: 'risk_tolerance', value: level } as any,
+      payload: { investigationId: investigation.id, kind: 'risk_tolerance', value: level },
     });
   const onAddContext = (kind: 'note' | 'suspicion' | 'direction' | 'constraint', value: string) =>
     invoke({
       type: 'investigation.applyHumanInterruption',
-      payload: { investigationId: investigation.id, kind, value } as any,
+      payload: { investigationId: investigation.id, kind, value },
     });
   const onExecute = () =>
     invoke({
@@ -356,7 +399,7 @@ export function InvestigationWorkspace() {
                   ? () =>
                       invoke({
                         type: 'investigation.applyHumanInterruption',
-                        payload: { investigationId: investigation.id, kind: 'reject_replan' } as any,
+                        payload: { investigationId: investigation.id, kind: 'reject_replan' },
                       })
                   : undefined
               }

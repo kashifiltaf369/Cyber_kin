@@ -1,23 +1,23 @@
 import { describe, expect, it, vi } from 'vitest';
-import { SyntheticEnvironmentService } from '../src/main/integrations/synthetic/synthetic-environment-service';
-import { SyntheticDatasetStore } from '../src/main/integrations/synthetic/synthetic-dataset';
-import { SyntheticSiemAdapter } from '../src/main/integrations/synthetic/synthetic-siem-adapter';
-import { SyntheticEdrAdapter } from '../src/main/integrations/synthetic/synthetic-edr-adapter';
-import { SyntheticNetworkAdapter } from '../src/main/integrations/synthetic/synthetic-network-adapter';
-import { SyntheticIdentityAdapter } from '../src/main/integrations/synthetic/synthetic-identity-adapter';
-import { SyntheticThreatIntelAdapter } from '../src/main/integrations/synthetic/synthetic-threatintel-adapter';
-import { SyntheticFileAnalysisAdapter } from '../src/main/integrations/synthetic/synthetic-file-analysis-adapter';
-import { buildSyntheticFactories } from '../src/main/integrations/synthetic/synthetic-factories';
-import { IntegrationRegistry } from '../src/main/integrations/integration-registry';
-import { listSyntheticScenarios } from '../src/main/integrations/synthetic/scenarios';
-import { SYNTHETIC_WATERMARK } from '../src/main/integrations/synthetic/scenario-types';
-import { InvestigationService } from '../src/main/investigation/investigation-service';
+import { SyntheticEnvironmentService } from '../../src/main/integrations/synthetic/synthetic-environment-service';
+import { SyntheticDatasetStore } from '../../src/main/integrations/synthetic/synthetic-dataset';
+import { SyntheticSiemAdapter } from '../../src/main/integrations/synthetic/synthetic-siem-adapter';
+import { SyntheticEdrAdapter } from '../../src/main/integrations/synthetic/synthetic-edr-adapter';
+import { SyntheticNetworkAdapter } from '../../src/main/integrations/synthetic/synthetic-network-adapter';
+import { SyntheticIdentityAdapter } from '../../src/main/integrations/synthetic/synthetic-identity-adapter';
+import { SyntheticThreatIntelAdapter } from '../../src/main/integrations/synthetic/synthetic-threatintel-adapter';
+import { SyntheticFileAnalysisAdapter } from '../../src/main/integrations/synthetic/synthetic-file-analysis-adapter';
+import { buildSyntheticFactories } from '../../src/main/integrations/synthetic/synthetic-factories';
+import { IntegrationRegistry } from '../../src/main/integrations/integration-registry';
+import { listSyntheticScenarios } from '../../src/main/integrations/synthetic/scenarios';
+import { SYNTHETIC_WATERMARK } from '../../src/main/integrations/synthetic/scenario-types';
+import { InvestigationService } from '../../src/main/investigation/investigation-service';
 import type {
   DatabaseInstance,
   InvestigationEventRow,
   InvestigationRow,
   InvestigationSessionLinkRow,
-} from '../src/main/db/database';
+} from '../../src/main/db/database';
 
 function makeDb() {
   const investigations = new Map<string, InvestigationRow>();

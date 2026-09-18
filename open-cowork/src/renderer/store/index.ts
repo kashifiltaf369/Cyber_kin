@@ -11,6 +11,8 @@ import type {
   SandboxSyncStatus,
   SkillsStorageChangeEvent,
 } from '../types';
+import type { Investigation, InvestigationEvent } from '../../shared/cyber/investigation-types';
+import type { InvestigationPlan } from '../../main/investigation/parallel-investigation-engine';
 import { applySessionUpdate } from '../utils/session-update';
 
 export type GlobalNoticeType = 'info' | 'warning' | 'error' | 'success';
@@ -134,6 +136,18 @@ interface AppState {
   // System theme (from OS native theme)
   systemDarkMode: boolean;
 
+  // KIN investigations (SOC workspace)
+  investigations: Investigation[];
+  activeInvestigationId: string | null;
+  /** Top-level main-panel view: chat stack or the investigations workspace. */
+  activeView: 'chat' | 'investigations';
+  /** Latest execution plan for the active investigation. */
+  activeInvestigationPlan: InvestigationPlan | null;
+  /** Latest replan-produced plan for the active investigation (drives the "replanned" badge). */
+  activeInvestigationReplan: InvestigationPlan | null;
+  /** Latest replan recommendation event awaiting analyst approval. */
+  activeInvestigationRecommendation: InvestigationEvent | null;
+
   // Actions
   setSessions: (sessions: Session[]) => void;
   addSession: (session: Session) => void;
@@ -207,6 +221,16 @@ interface AppState {
 
   // System theme actions
   setSystemDarkMode: (dark: boolean) => void;
+
+  // KIN investigation actions
+  setInvestigations: (investigations: Investigation[]) => void;
+  upsertInvestigation: (investigation: Investigation) => void;
+  removeInvestigation: (investigationId: string) => void;
+  setActiveInvestigation: (investigationId: string | null) => void;
+  setActiveView: (view: 'chat' | 'investigations') => void;
+  setActiveInvestigationPlan: (plan: InvestigationPlan | null) => void;
+  setActiveInvestigationReplan: (plan: InvestigationPlan | null) => void;
+  setActiveInvestigationRecommendation: (recommendation: InvestigationEvent | null) => void;
 }
 
 const defaultSettings: Settings = {
@@ -640,6 +664,41 @@ export const useAppStore = create<AppState>((set) => ({
 
   // System theme actions
   setSystemDarkMode: (dark) => set({ systemDarkMode: dark }),
+
+  // KIN investigations
+  investigations: [],
+  activeInvestigationId: null,
+  activeView: 'chat',
+  activeInvestigationPlan: null,
+  activeInvestigationReplan: null,
+  activeInvestigationRecommendation: null,
+  setInvestigations: (investigations) => set({ investigations }),
+  upsertInvestigation: (investigation) =>
+    set((state) => {
+      const exists = state.investigations.some((item) => item.id === investigation.id);
+      return {
+        investigations: exists
+          ? state.investigations.map((item) => (item.id === investigation.id ? investigation : item))
+          : [...state.investigations, investigation],
+      };
+    }),
+  removeInvestigation: (investigationId) =>
+    set((state) => ({
+      investigations: state.investigations.filter((item) => item.id !== investigationId),
+      activeInvestigationId: state.activeInvestigationId === investigationId ? null : state.activeInvestigationId,
+    })),
+  setActiveInvestigation: (investigationId) =>
+    set({
+      activeInvestigationId: investigationId,
+      // Plan/replan/recommendation state is scoped to the active investigation.
+      activeInvestigationPlan: null,
+      activeInvestigationReplan: null,
+      activeInvestigationRecommendation: null,
+    }),
+  setActiveInvestigationPlan: (plan) => set({ activeInvestigationPlan: plan }),
+  setActiveInvestigationReplan: (plan) => set({ activeInvestigationReplan: plan }),
+  setActiveInvestigationRecommendation: (recommendation) => set({ activeInvestigationRecommendation: recommendation }),
+  setActiveView: (view) => set({ activeView: view }),
 }));
 
 // Expose helpers for nav-server (CLI-driven UI navigation via executeJavaScript)

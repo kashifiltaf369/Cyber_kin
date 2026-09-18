@@ -145,6 +145,7 @@ describe('Runtime investigation orchestrator', () => {
     const { runtime } = createFakeRuntime();
     const orchestrator = new RuntimeInvestigationOrchestrator(service, runtime, undefined, {
       pollIntervalMs: 1,
+      getWorkspaceCwd: () => '/workspace',
     });
 
     const result = await orchestrator.executeInvestigation(created.id);
@@ -213,6 +214,7 @@ describe('Runtime investigation orchestrator', () => {
 
     const orchestrator = new RuntimeInvestigationOrchestrator(service, runtime, undefined, {
       pollIntervalMs: 1,
+      getWorkspaceCwd: () => '/workspace',
     });
 
     await orchestrator.executeInvestigation(created.id);
@@ -229,6 +231,7 @@ describe('Runtime investigation orchestrator', () => {
     const { runtime } = createFakeRuntime();
     const orchestrator = new RuntimeInvestigationOrchestrator(service, runtime, undefined, {
       pollIntervalMs: 1,
+      getWorkspaceCwd: () => '/workspace',
     });
 
     const plannedTask: PlannedInvestigationTask = {
@@ -333,7 +336,10 @@ describe('Runtime investigation orchestrator', () => {
       getMessages: vi.fn(() => []),
     };
 
-    const executor = new RuntimeBackedInvestigationWorkerExecutor(runtime, service, { pollIntervalMs: 1 });
+    const executor = new RuntimeBackedInvestigationWorkerExecutor(runtime, service, {
+      pollIntervalMs: 1,
+      getWorkspaceCwd: () => '/workspace',
+    });
     const controller = new AbortController();
     const execution = executor.execute({
       investigation: service.get(created.id)!,

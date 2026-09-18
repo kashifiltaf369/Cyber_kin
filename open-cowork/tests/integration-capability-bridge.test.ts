@@ -142,7 +142,11 @@ describe('IntegrationCapabilityBridge', () => {
       onUnavailable: (info) => unavailable.push(info),
     });
     await expect(
-      bridge.runWithAdapterFallback('search_events', { sourcePath: '/tmp/__does_not_exist__.log', query: 'evil' })
+      bridge.runWithAdapterFallback(
+        'search_events',
+        { sourcePath: '/tmp/__does_not_exist__.log', query: 'evil' },
+        { workspacePath: '/tmp' }
+      )
     ).rejects.toThrow(/File not found/);
     expect(unavailable).toHaveLength(1);
     expect(unavailable[0].domain).toBe('siem');

@@ -41,7 +41,7 @@ function createReplanQueryTool(
         description: 'Query type: uncertainty, next_best_work, cached_recommendation, or full_replan.',
       }),
     }),
-    async execute(_toolCallId: string, params: unknown, _signal: AbortSignal | undefined, _onUpdate: any, ctx: ExtensionContext) {
+    async execute(_toolCallId: string, params: unknown, _signal: AbortSignal | undefined, _onUpdate: unknown, ctx: ExtensionContext) {
       const sessionId = ctx.sessionManager.getSessionId();
       if (!sessionId) {
         return toolTextResult('Error: session context unavailable.');

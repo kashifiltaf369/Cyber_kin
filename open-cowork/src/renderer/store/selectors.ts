@@ -18,6 +18,8 @@ import { useShallow } from 'zustand/react/shallow';
 import { useAppStore } from './index';
 import type { Session, Message, TraceStep, Settings, AppConfig } from '../types';
 import type { GlobalNotice, SessionExecutionClock, CompactionEvent } from './index';
+import type { Investigation, InvestigationEvent } from '../../shared/cyber/investigation-types';
+import type { InvestigationPlan } from '../../main/investigation/parallel-investigation-engine';
 
 // ---------------------------------------------------------------------------
 // Session domain
@@ -301,4 +303,42 @@ export function useActiveCompactionHistory(): CompactionEvent[] {
   return useAppStore((s) =>
     s.activeSessionId ? (s.sessionStates[s.activeSessionId]?.compactionHistory ?? []) : []
   );
+}
+
+// ---------------------------------------------------------------------------
+// KIN investigation domain
+// ---------------------------------------------------------------------------
+
+/** Returns every known investigation (including archived). */
+export function useInvestigations(): Investigation[] {
+  return useAppStore((s) => s.investigations);
+}
+
+/** Returns the id of the investigation open in the workspace, if any. */
+export function useActiveInvestigationId(): string | null {
+  return useAppStore((s) => s.activeInvestigationId);
+}
+
+/** Returns the investigation currently open in the workspace, or null. */
+export function useActiveInvestigation(): Investigation | null {
+  return useAppStore((s) =>
+    s.activeInvestigationId
+      ? s.investigations.find((item) => item.id === s.activeInvestigationId) ?? null
+      : null
+  );
+}
+
+/** Returns the latest execution plan for the active investigation. */
+export function useActiveInvestigationPlan(): InvestigationPlan | null {
+  return useAppStore((s) => s.activeInvestigationPlan);
+}
+
+/** Returns the latest replan plan for the active investigation. */
+export function useActiveInvestigationReplan(): InvestigationPlan | null {
+  return useAppStore((s) => s.activeInvestigationReplan);
+}
+
+/** Returns the pending replan recommendation for the active investigation. */
+export function useActiveInvestigationRecommendation(): InvestigationEvent | null {
+  return useAppStore((s) => s.activeInvestigationRecommendation);
 }

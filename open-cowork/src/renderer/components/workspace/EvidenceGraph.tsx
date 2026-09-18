@@ -162,7 +162,7 @@ export function EvidenceGraph({ investigation }: EvidenceGraphProps) {
   );
 }
 
-function iconGlyph(Icon: any): string {
+function iconGlyph(Icon: { displayName?: string; name?: string } | undefined): string {
   const name = Icon?.displayName ?? Icon?.name ?? '';
   if (!name) return '◆';
   const m: Record<string, string> = {

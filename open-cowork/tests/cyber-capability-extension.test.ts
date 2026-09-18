@@ -134,7 +134,7 @@ describe('CyberCapabilityExtension', () => {
       { name: 'inspect_file', input: { filePath } },
       undefined as never,
       undefined as never,
-      { sessionId: 'session-1' }
+      { sessionId: 'session-1', cwd: root }
     );
     const executionText = textFrom(execution as never);
     expect(executionText).toContain('artifact.txt');
@@ -381,7 +381,7 @@ describe('CyberCapabilityExtension', () => {
       { name: 'inspect_file', input: { filePath } },
       undefined as never,
       undefined as never,
-      { sessionId: 'session-audit' }
+      { sessionId: 'session-audit', cwd: root }
     );
 
     const updated = investigationService.get(created.id)!;

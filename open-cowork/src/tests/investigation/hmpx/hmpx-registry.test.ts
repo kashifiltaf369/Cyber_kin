@@ -7,11 +7,11 @@
 
 import { describe, it, expect } from 'vitest';
 import { CyberCapabilityRegistry } from '../../../main/cyber/cyber-capability-registry';
-import type { CyberCapabilityDefinition } from '../../../main/cyber/cyber-capability-registry';
+import type { CyberCapabilityName, CyberCapabilityDefinition } from '../../../main/cyber/cyber-capability-registry';
 
 function makeCapability(name: string, tags: string[] = [], canAnswer: string[] = []): CyberCapabilityDefinition {
   return {
-    name: name as any,
+    name: name as CyberCapabilityName,
     description: `Capability ${name}`,
     inputSchema: { type: 'object', properties: {} },
     outputSchema: { type: 'object', properties: {} },

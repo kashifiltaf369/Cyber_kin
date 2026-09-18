@@ -5,7 +5,7 @@
  * to enumerate, or buildSyntheticScenario(id) to instantiate.
  */
 
-import type { ScenarioId, SyntheticScenario } from './scenario-types';
+import type { ScenarioId, SyntheticScenario } from '../scenario-types';
 import { suspiciousPowershellScenario } from './01-suspicious-powershell';
 import { credentialTheftScenario } from './02-credential-theft';
 import { lateralMovementScenario } from './03-lateral-movement';

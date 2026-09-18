@@ -14,6 +14,7 @@
 
 import { v4 as uuidv4 } from 'uuid';
 import type {
+  HMPIXCapability,
   HMPIXCapabilityCandidate,
   HMPIXCognitiveContext,
   HMPIXDecomposition,
@@ -24,16 +25,17 @@ import type {
   HMPIXProbe,
   HMPIXProbeBudget,
   HMPIXProbeResult,
+  HMPIXRecommendedAction,
   HMPIXReplanDecision,
   HMPIXReplanTrigger,
   HMPIXSelection,
   HMPIXSubProblem,
 } from './hmpx-types';
 import type { InvestigationService } from './investigation-service';
-import type { AgentCapabilityDefinition, AgentCapabilityRegistry, InvestigationAgentRole } from './parallel-investigation-engine';
-import type { CyberCapabilityDefinition, CyberCapabilityRegistry } from '../cyber/cyber-capability-registry';
+import type { AgentCapabilityDefinition, AgentCapabilityRegistry } from './parallel-investigation-engine';
+import type { CyberCapabilityDefinition, CyberCapabilityName, CyberCapabilityRegistry } from '../cyber/cyber-capability-registry';
 import type { InvestigationReplanner, UncertaintyAssessment } from './investigation-replanner';
-import type { Investigation, InvestigationEvidence, InvestigationHypothesis } from '../../shared/cyber/investigation-types';
+import type { Investigation, InvestigationEvidence } from '../../shared/cyber/investigation-types';
 
 // ---------------------------------------------------------------------------
 // Default probe budget (configurable)
@@ -63,7 +65,7 @@ export interface HMPIXKernelDependencies {
 // ---------------------------------------------------------------------------
 
 export interface ProbeExecutor {
-  executeProbe(capability: CyberCapabilityDefinition, input: unknown): Promise<unknown>;
+  executeProbe(capability: HMPIXCapability, input: unknown): Promise<unknown>;
 }
 
 // ---------------------------------------------------------------------------
@@ -73,8 +75,14 @@ export interface ProbeExecutor {
 export class DefaultProbeExecutor implements ProbeExecutor {
   constructor(private readonly registry: CyberCapabilityRegistry) {}
 
-  async executeProbe(capability: CyberCapabilityDefinition, input: unknown): Promise<unknown> {
-    return this.registry.execute(capability.name, input);
+  async executeProbe(capability: HMPIXCapability, input: unknown): Promise<unknown> {
+    // HMPIX capabilities are keyed by the underlying registry capability name
+    // for registry-backed entries; role-based candidates cannot be probed.
+    const definition = this.registry.get(capability.id as CyberCapabilityName);
+    if (!definition) {
+      throw new Error(`Capability is not probeable: ${capability.id}`);
+    }
+    return this.registry.execute(definition.name, input);
   }
 }
 
@@ -632,7 +640,9 @@ export class HMPIXKernelImpl implements HMPIXKernel {
     return {
       id: obs.id,
       investigationId: '',
-      type: obs.type,
+      // UNKNOWN observations are recorded as OBSERVATION-type findings whose
+      // content (and tag) still carries the UNKNOWN classification.
+      type: obs.type === 'UNKNOWN' ? 'OBSERVATION' : obs.type,
       title: obs.content.slice(0, 100),
       source: 'hmpx-kernel',
       timestamp: obs.createdAt,

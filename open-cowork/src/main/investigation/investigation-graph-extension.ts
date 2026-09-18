@@ -63,7 +63,7 @@ function createGraphQueryTool(
       withinMs: Type.Optional(Type.Number({ minimum: 0 })),
       anchorTimestamp: Type.Optional(Type.Number()),
     }),
-    async execute(_toolCallId: string, params: unknown, _signal: AbortSignal | undefined, _onUpdate: any, ctx: ExtensionContext) {
+    async execute(_toolCallId: string, params: unknown, _signal: AbortSignal | undefined, _onUpdate: unknown, ctx: ExtensionContext) {
       const sessionId = ctx.sessionManager.getSessionId();
       if (!sessionId) {
         return toolTextResult('Error: session context unavailable.');

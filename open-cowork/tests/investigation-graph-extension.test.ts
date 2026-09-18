@@ -123,9 +123,7 @@ describe('InvestigationGraphExtension', () => {
     expect(result.customTools).toHaveLength(1);
 
     const tool = result.customTools?.[0];
-    const overview = await tool?.execute('call-1', { queryType: 'overview' }, undefined as never, undefined as never, {
-      sessionId: 'session-1',
-    });
+    const overview = await tool?.execute('call-1', { queryType: 'overview' }, undefined as never, undefined as never, { sessionManager: { getSessionId: () => 'session-1' } });
     expect(textFrom(overview)).toContain('relationshipCount');
 
     const connected = await tool?.execute(
@@ -133,7 +131,7 @@ describe('InvestigationGraphExtension', () => {
       { queryType: 'connected_entities', entityId: processId, direction: 'outbound' },
       undefined as never,
       undefined as never,
-      { sessionId: 'session-1' }
+      { sessionManager: { getSessionId: () => 'session-1' } }
     );
     expect(textFrom(connected)).toContain('Workstation-22');
 
@@ -142,7 +140,7 @@ describe('InvestigationGraphExtension', () => {
       { queryType: 'evidence_for_relationship', relationshipId },
       undefined as never,
       undefined as never,
-      { sessionId: 'session-1' }
+      { sessionManager: { getSessionId: () => 'session-1' } }
     );
     expect(textFrom(evidence)).toContain('Process execution');
   });
