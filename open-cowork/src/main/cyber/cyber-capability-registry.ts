@@ -208,7 +208,16 @@ export interface LocalLogsOutput {
 export class CyberCapabilityRegistry {
   private readonly definitions = new Map<CyberCapabilityName, CyberCapabilityDefinition>();
 
-  constructor(definitions: CyberCapabilityDefinition[] = buildDefaultCapabilities()) {
+  /**
+   * Execution timeout bounds. `maxTimeoutMs` is a hard cap on every
+   * capability's declared `timeoutMs` (configurable, not arbitrary: callers
+   * may lower it, never exceed it). `defaultTimeoutMs` applies when a
+   * definition omits `timeoutMs`.
+   */
+  constructor(
+    definitions: CyberCapabilityDefinition[] = buildDefaultCapabilities(),
+    private readonly timeoutOptions: { defaultTimeoutMs?: number; maxTimeoutMs?: number } = {}
+  ) {
     for (const definition of definitions) {
       this.definitions.set(definition.name, definition);
     }
@@ -317,7 +326,38 @@ export class CyberCapabilityRegistry {
       throw new Error(`Unknown capability: ${name}`);
     }
     this.enforceFilesystemContainment(name, input, ctx);
-    return capability.executor(input, ctx);
+    return this.executeWithTimeout(name, capability, input, ctx);
+  }
+
+  /**
+   * Enforce the capability's declared `timeoutMs` (clamped by the
+   * registry-level hard cap). The losing executor promise is not cancellable
+   * (executors take no signal) — the caller stops waiting and receives a
+   * typed timeout error instead of hanging.
+   */
+  private executeWithTimeout<Name extends CyberCapabilityName>(
+    name: Name,
+    capability: CyberCapabilityDefinition,
+    input: unknown,
+    ctx?: CyberCapabilityExecutionContext
+  ): Promise<unknown> {
+    const { defaultTimeoutMs = 30_000, maxTimeoutMs = 120_000 } = this.timeoutOptions;
+    const declared = typeof capability.timeoutMs === 'number' && capability.timeoutMs > 0
+      ? capability.timeoutMs
+      : defaultTimeoutMs;
+    const effectiveMs = Math.min(declared, maxTimeoutMs);
+
+    const execution = Promise.resolve(capability.executor(input, ctx));
+    let timer: NodeJS.Timeout | undefined;
+    const timeout = new Promise<never>((_, reject) => {
+      timer = setTimeout(() => {
+        reject(new Error(`[cyber] ${name} timed out after ${effectiveMs}ms (declared ${declared}ms).`));
+      }, effectiveMs);
+    });
+
+    return Promise.race([execution, timeout]).finally(() => {
+      if (timer) clearTimeout(timer);
+    });
   }
 
   /**

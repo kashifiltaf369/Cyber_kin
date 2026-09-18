@@ -222,7 +222,28 @@ function createExecuteTool(
         return toolTextResult(`Error: ${decision.reason}`);
       }
 
-      const result = await registry.execute(capability.name, input, executionContext);
+      let result: unknown;
+      try {
+        result = await registry.execute(capability.name, input, executionContext);
+      } catch (error) {
+        // Failures (incl. containment refusals and execution timeouts) are
+        // audited like every other outcome — never a silent gap in the trail.
+        if (auditTrail) {
+          const record = permissionPolicy.audit(
+            auditTrail,
+            capability,
+            input,
+            { sessionId, investigationId, actor: 'agent', agent: sessionId },
+            decision,
+            {
+              status: 'failed',
+              summary: `Failed capability ${capability.name}: ${error instanceof Error ? error.message : String(error)}`,
+            }
+          );
+          options.onAuditRecord?.(record);
+        }
+        throw error;
+      }
       if (auditTrail) {
         const record = permissionPolicy.audit(
           auditTrail,

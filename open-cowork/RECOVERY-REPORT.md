@@ -46,7 +46,6 @@ Scope: repair the existing implementation, connect existing pieces, fix verified
 
 - **Live worker execution is UNVERIFIED end-to-end**: the orchestrator → SessionManager → pi-agent wiring exists (session create with workspace cwd, allowed tools, abort, session linking, structured-output parsing — all covered by unit tests), but a real worker run needs a configured model/API key, which this sandbox does not have. Nothing here fakes it.
 - **Electron GUI runtime** (window, real clicks) was not exercised in this sandbox; renderer verification is typecheck + build + component-level tests. The investigations view mounts through the same PanelErrorBoundary/Suspense path as ChatView.
-- **Durability of the audit trail**: records are deep-frozen in memory and mirrored into the persisted investigation event log, but there is no standalone append-only file, hash chain, or MAC. (Known, documented limitation — one test pins it.)
 - **Task control with running workers** (pause/resume/cancel/reprioritize against live execution) is wired to `ParallelTaskManager` and reaches the scheduler/abort controllers; pre-execution calls are verified no-ops. Verifying mid-flight cancellation requires live workers (same API-key constraint as above).
 - **electron-builder packaging** was not run (downloads Electron binaries; sandbox blocks the network endpoint). Compile/bundle stages all pass.
 
@@ -55,7 +54,7 @@ Scope: repair the existing implementation, connect existing pieces, fix verified
 | Command | Result |
 |---|---|
 | `npx tsc --noEmit` | **0 errors** (baseline before recovery: 283 errors / 25 files) |
-| `npx vitest run` | **1389 passed / 5 failed** of 1394 (190 files) — baseline was 1348/28 |
+| `npx vitest run` | **1398 passed / 5 failed** of 1403 (190 files) — baseline was 1348/28 |
 | `npm run lint` | **0 errors**, 10 warnings (pre-existing hook-deps/unused-var warnings) |
 | `npx vite build` | success (renderer 7.97 s + preload 27 ms) |
 | `npm run build:wsl-agent` / `build:lima-agent` | success |
@@ -78,6 +77,8 @@ Classification of the 5 remaining test failures:
 | `ask` never silently `allow` | GUI: `SessionManager.requestPermission` (60 s → deny); subagent/headless: `ask` → deny | code + resolver semantics |
 | Classifier fail-closed default | unmatched capability → `HIGH_RISK_ACTION` → approval required | `tests/security-capability-classifier.test.ts` 8/8 |
 | Audit immutability | deep freeze at append, deep-clone on read, denied actions recorded, records mirrored to investigation events | `tests/security-audit-trail.test.ts` 9/9 |
+| Durable hash-chained audit file | `CyberAuditDurableStore` — every trail record appended to `cyber-audit.jsonl` beside the app DB as `{seq, prevHash, hash, record}` with `hash = sha256(prevHash + canonicalJson(record))`; chain continues across restarts; `verifyCyberAuditFile` recomputes the chain and names the first broken seq (tamper-EVIDENT: no MAC/external anchor, a full-file rewrite by a file-owner attacker is not detectable — documented) | `tests/security-audit-durable.test.ts` 6/6 |
+| Execution timeouts | `CyberCapabilityRegistry.execute` races every capability against its declared `timeoutMs`, clamped by a configurable registry-level hard cap (`maxTimeoutMs`, default 120s; callers may lower, never raise); timeouts throw a typed error and are audited as `failed` — as are all executor errors | registry timeout specs, extension failure-audit spec |
 | Credential redaction | string/object/error redaction incl. scheme tokens, generic keys; no false-positive on English | `tests/security-credential-redaction.test.ts` 13/13 |
 
 Remaining security gaps (documented, not hidden): audit trail has no hash chain/MAC or append-only durable file; subagent tool allow/deny still relies on the shared rules store (no per-subagent identity); containment is lexical (symlinked paths inside the workspace are skipped by the walker but `inspect_file`/`calculate_hash` will `stat`/read through a symlink if an agent names one directly — flagged as a MEDIUM blocker below).
@@ -98,7 +99,7 @@ Remaining security gaps (documented, not hidden): audit trail has no hash chain/
 | 10 | Report generation/export | **YES** generate/markdown (tested); **PARTIAL** save-dialog export | golden-path test |
 | 11 | Local cyber capabilities (11 executors) | **YES** with containment + bounds | registry specs |
 | 12 | Permission system (rules + prompts) | **YES** for the cyber path; rules store itself is pre-existing OpenCowork | extension specs |
-| 13 | Cyber audit trail | **YES** in-memory + event-log mirror; **NO** durable hash-chained log (documented) | audit specs |
+| 13 | Cyber audit trail | **YES** in-memory + event-log mirror + durable hash-chained JSONL file (tamper-evident; no MAC — documented) | audit specs (18 tests across both files) |
 | 14 | Credential redaction | **YES** | 13/13 |
 | 15 | Synthetic DEMO environment | **YES** — flag-gated, watermarked, DEMO-badged in UI, separated from real findings | 13/13 service tests + demo-label |
 | 16 | HMPX meta-brain kernel | **NO in product path** — compiles (was 22 errors), tests pass, deliberately unwired per scope | tsc + hmpx specs |
@@ -113,11 +114,10 @@ Remaining security gaps (documented, not hidden): audit trail has no hash chain/
 - H1. Electron GUI smoke pass: open the Investigations view, create → execute → approve replan with a real window (component/store layers are verified; the running app is not). Environmental evidence for why this sandbox cannot close it: the Electron binary itself cannot be installed — `npm ci --ignore-scripts` skips its postinstall, and the postinstall download fails because release assets redirect to `objects.githubusercontent.com`, which is unreachable from this sandbox (`curl` to the 302 target fails; `npmmirror.com` mirror unreachable; direct download via `node install.js` fails with `Client network socket disconnected before secure TLS connection was established`). The app's own headless RPC mode (`electron . --headless --mode rpc --cwd …`, which serves `handleClientEvent` over stdin JSONL and would have driven the same IPC path as the GUI without a display) was the intended vehicle and is blocked by the same missing binary.
 
 **MEDIUM**
-- M1. Durable append-only audit file (+ optional hash chain) — currently memory + investigation event mirror only.
-- M2. Mid-flight task-control verification once C1 is closed (pause/cancel a running worker and confirm abort + event trail).
-- M3. 10 pre-existing eslint warnings (hook-deps in `WorkerInspector`/`useApiConfigState`, unused `_` in store).
+- M1. Mid-flight task-control verification once C1 is closed (pause/cancel a running worker and confirm abort + event trail).
+- M2. 10 pre-existing eslint warnings (hook-deps in `WorkerInspector`/`useApiConfigState`, unused `_` in store).
 
-*(Fixed during recovery: the former H2 — symlink read-through — capability inputs are now real-path resolved through their deepest existing ancestor and refused when they escape the workspace; and the former M3 — the `recent-workspace-files` clock-jitter flake — now uses deterministic `utimes` stamps, stable 5/5 across repeat runs.)*
+*(Fixed during recovery: the former H2 — symlink read-through — capability inputs are now real-path resolved through their deepest existing ancestor and refused when they escape the workspace; the former M1 — durable audit — is now a hash-chained append-only `cyber-audit.jsonl` verified by `verifyCyberAuditFile`, with failures/timeouts audited too; the former M3 — the `recent-workspace-files` clock-jitter flake — now uses deterministic `utimes` stamps, stable 5/5 across repeat runs.)*
 
 **FUTURE**
 - F1. The 5 UI-redesign specs (charcoal palette, warm orange accent, editorial welcome/header layouts) — intentional design debt, specs preserved.

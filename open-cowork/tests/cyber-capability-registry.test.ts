@@ -123,6 +123,65 @@ describe('CyberCapabilityRegistry', () => {
     ).rejects.toThrow(/no workspace path is available/);
   });
 
+  it('enforces the declared capability timeout and fails with a typed error', async () => {
+    const registry = new CyberCapabilityRegistry(
+      [
+        {
+          name: 'search_dns',
+          description: 'Slow capability for timeout verification.',
+          inputSchema: { type: 'object', properties: {} },
+          outputSchema: { type: 'object', properties: {} },
+          riskLevel: 'LOW',
+          permissionsRequired: [],
+          timeoutMs: 50,
+          cost: 'LOW',
+          supportedAdapters: [],
+          tags: ['dns'],
+          canAnswer: ['search dns'],
+          executor: async () => {
+            await new Promise((resolve) => setTimeout(resolve, 5000));
+            return { records: [] };
+          },
+        },
+      ],
+      { maxTimeoutMs: 120_000 }
+    );
+
+    await expect(registry.execute('search_dns', {})).rejects.toThrow(
+      /search_dns timed out after 50ms/
+    );
+  });
+
+  it('clamps declared timeouts above the configured hard cap', async () => {
+    const registry = new CyberCapabilityRegistry(
+      [
+        {
+          name: 'search_dns',
+          description: 'Over-eager timeout declaration.',
+          inputSchema: { type: 'object', properties: {} },
+          outputSchema: { type: 'object', properties: {} },
+          riskLevel: 'LOW',
+          permissionsRequired: [],
+          timeoutMs: 10_000,
+          cost: 'LOW',
+          supportedAdapters: [],
+          tags: ['dns'],
+          canAnswer: ['search dns'],
+          executor: async () => {
+            await new Promise((resolve) => setTimeout(resolve, 5000));
+            return { records: [] };
+          },
+        },
+      ],
+      // Hard cap far below the declared 10s: effective timeout is 100ms.
+      { maxTimeoutMs: 100 }
+    );
+
+    await expect(registry.execute('search_dns', {})).rejects.toThrow(
+      /timed out after 100ms \(declared 10000ms\)/
+    );
+  });
+
   it('refuses paths that resolve through symlinks outside the session workspace', async () => {
     const base = path.join(process.cwd(), 'tmp-cyber-symlink-test');
     rmSync(base, { recursive: true, force: true });

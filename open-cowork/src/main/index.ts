@@ -17,7 +17,8 @@ import { join, resolve, dirname, isAbsolute, basename } from 'path';
 import * as fs from 'fs';
 import { execFileSync } from 'child_process';
 import { config } from 'dotenv';
-import { initDatabase, closeDatabase } from './db/database';
+import { initDatabase, closeDatabase, getDatabasePath } from './db/database';
+import { CyberAuditDurableStore } from './cyber/cyber-audit-durable-store';
 import { SessionManager } from './session/session-manager';
 import { SkillsManager } from './skills/skills-manager';
 import { PluginCatalogService } from './skills/plugin-catalog-service';
@@ -158,6 +159,23 @@ let syntheticEnvironmentService: SyntheticEnvironmentService | null = null;
  * (see the `onAuditRecord` wiring below).
  */
 const cyberActionAuditTrail = new CyberActionAuditTrail();
+
+/**
+ * Attach the durable hash-chained audit store (cyber-audit.jsonl next to the
+ * app database). Every audit record from this point on is appended to the
+ * chain; a write failure throws so cyber actions can never silently bypass
+ * the durable trail. Called once per app start (GUI and headless share the
+ * module-level trail instance).
+ */
+function attachDurableCyberAudit(): void {
+  const auditStore = new CyberAuditDurableStore(
+    join(dirname(getDatabasePath()), 'cyber-audit.jsonl')
+  );
+  cyberActionAuditTrail.setDurableSink((record) => {
+    auditStore.append(record);
+  });
+  log('[CyberAudit] Durable audit chain attached:', auditStore.path, 'tail seq', auditStore.tail.seq);
+}
 
 /**
  * Tool names that a spawned subagent may never invoke, regardless of what
@@ -988,6 +1006,7 @@ app
       // Start config file watcher for bidirectional sync
       startConfigFileWatcher();
       const db = initDatabase();
+      attachDurableCyberAudit();
 
       // Build the JSONL sender with permission interception BEFORE constructing dependent services
       const headlessSendToRenderer = createHeadlessSendToRenderer();
@@ -1432,6 +1451,7 @@ app
 
     // Initialize database
     const db = initDatabase();
+    attachDurableCyberAudit();
 
     pluginRuntimeService = new PluginRuntimeService(new PluginCatalogService());
     investigationService = new InvestigationService(db, sendToRenderer);

@@ -7,13 +7,15 @@
  *   - Deep Object.freeze at append time (nested objects immutable)
  *   - list()/getByInvestigationId() return deep clones (caller mutations
  *     cannot reach trail state)
- *   - Known remaining limitation: in-memory only, no hash chain / MAC and no
- *     durable append-only file (records are mirrored into the linked
- *     investigation's persisted event log instead)
+ *   - In-memory records expose no chain data themselves; the durable layer
+ *     (CyberAuditDurableStore, see security-audit-durable.test.ts) appends
+ *     every record to a hash-chained cyber-audit.jsonl beside the app
+ *     database. Remaining limitation: the durable chain is tamper-evident,
+ *     not tamper-proof (no MAC / external anchor).
  *
  * Historic "DOCUMENTS GAP" entries have been updated to CLOSED GAP regression
- * guards after the implementation hardened. The integrity-chain limitation
- * remains documented as a gap.
+ * guards after the implementation hardened. The in-memory no-chain gap below
+ * is still accurate for the trail's own API surface.
  */
 
 import { describe, it, expect } from 'vitest';

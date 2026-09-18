@@ -258,7 +258,7 @@ function prepareDatabaseDirectory(userDataPath: string): string {
 /**
  * Get the database file path
  */
-function getDatabasePath(): string {
+export function getDatabasePath(): string {
   // Use electron's userData path for persistent storage
   const userDataPath = app.getPath('userData');
   const dbDir = prepareDatabaseDirectory(userDataPath);
