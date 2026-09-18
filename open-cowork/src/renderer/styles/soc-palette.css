@@ -66,3 +66,21 @@
 @keyframes soc-spin {
   to { transform: rotate(360deg); }
 }
+
+/* KIN Demo Mode */
+@keyframes demo-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+.demo-pulse-dot {
+  animation: demo-pulse 1.6s ease-in-out infinite;
+  color: var(--soc-ai-primary);
+}
+
+@keyframes demo-approval-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(245, 185, 66, 0.35); }
+  50% { box-shadow: 0 0 0 5px rgba(245, 185, 66, 0.12); }
+}
+.demo-approval-glow {
+  animation: demo-approval-pulse 2s ease-in-out infinite;
+}

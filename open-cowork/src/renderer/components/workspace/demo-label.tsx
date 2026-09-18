@@ -10,13 +10,20 @@ import type { Investigation } from '../../../shared/cyber/investigation-types';
  */
 const SYNTHETIC_DEMO_TITLE_PREFIX = '[SYNTHETIC DEMO]';
 const SYNTHETIC_DEMO_WATERMARK = 'SYNTHETIC_DEMO_DATA';
+// KIN Demo Mode (deterministic scenario controller) markers.
+const DEMO_MODE_TITLE_PREFIX = '[DEMO MODE]';
+const DEMO_MODE_WATERMARK = 'KIN_DEMO_MODE';
 
 export function isSyntheticDemoInvestigation(investigation: Investigation): boolean {
   if (investigation.title.startsWith(SYNTHETIC_DEMO_TITLE_PREFIX)) return true;
+  if (investigation.title.startsWith(DEMO_MODE_TITLE_PREFIX)) return true;
   if (investigation.objective.includes(SYNTHETIC_DEMO_WATERMARK)) return true;
+  if (investigation.objective.includes(DEMO_MODE_WATERMARK)) return true;
   const context = investigation.humanCapabilityContext;
   if (context?.notes?.some((note) => note.value.includes(SYNTHETIC_DEMO_WATERMARK))) return true;
   if (context?.notes?.some((note) => note.value.includes(SYNTHETIC_DEMO_TITLE_PREFIX))) return true;
+  if (context?.notes?.some((note) => note.value.includes(DEMO_MODE_WATERMARK))) return true;
+  if (context?.notes?.some((note) => note.value.includes(DEMO_MODE_TITLE_PREFIX))) return true;
   return false;
 }
 

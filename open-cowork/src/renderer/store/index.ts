@@ -12,6 +12,7 @@ import type {
   SkillsStorageChangeEvent,
 } from '../types';
 import type { Investigation, InvestigationEvent } from '../../shared/cyber/investigation-types';
+import type { DemoControllerState } from '../../shared/cyber/demo-types';
 import type { InvestigationPlan } from '../../main/investigation/parallel-investigation-engine';
 import { applySessionUpdate } from '../utils/session-update';
 
@@ -148,6 +149,9 @@ interface AppState {
   /** Latest replan recommendation event awaiting analyst approval. */
   activeInvestigationRecommendation: InvestigationEvent | null;
 
+  // KIN Demo Mode (deterministic scenario controller state mirror)
+  demoState: DemoControllerState | null;
+
   // Actions
   setSessions: (sessions: Session[]) => void;
   addSession: (session: Session) => void;
@@ -231,6 +235,7 @@ interface AppState {
   setActiveInvestigationPlan: (plan: InvestigationPlan | null) => void;
   setActiveInvestigationReplan: (plan: InvestigationPlan | null) => void;
   setActiveInvestigationRecommendation: (recommendation: InvestigationEvent | null) => void;
+  setDemoState: (state: DemoControllerState | null) => void;
 }
 
 const defaultSettings: Settings = {
@@ -672,6 +677,7 @@ export const useAppStore = create<AppState>((set) => ({
   activeInvestigationPlan: null,
   activeInvestigationReplan: null,
   activeInvestigationRecommendation: null,
+  demoState: null,
   setInvestigations: (investigations) => set({ investigations }),
   upsertInvestigation: (investigation) =>
     set((state) => {
@@ -698,6 +704,7 @@ export const useAppStore = create<AppState>((set) => ({
   setActiveInvestigationPlan: (plan) => set({ activeInvestigationPlan: plan }),
   setActiveInvestigationReplan: (plan) => set({ activeInvestigationReplan: plan }),
   setActiveInvestigationRecommendation: (recommendation) => set({ activeInvestigationRecommendation: recommendation }),
+  setDemoState: (demoState) => set({ demoState }),
   setActiveView: (view) => set({ activeView: view }),
 }));
 

@@ -13,6 +13,7 @@ import { useIPC } from '../../hooks/useIPC';
 import { useInvestigations } from '../../store/selectors';
 import { formatRelative } from './role-meta';
 import { DemoBadge, isSyntheticDemoInvestigation } from './demo-label';
+import { DemoModeIndicator } from '../demo/DemoModeIndicator';
 
 export interface InvestigationsListProps {
   onSelect: (id: string) => void;
@@ -96,6 +97,7 @@ export function InvestigationsList({ onSelect }: InvestigationsListProps) {
         >
           <Plus className="w-3.5 h-3.5" /> New investigation
         </button>
+        <DemoModeIndicator />
       </div>
 
       <div

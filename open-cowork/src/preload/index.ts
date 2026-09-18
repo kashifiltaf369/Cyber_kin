@@ -82,6 +82,11 @@ const ALLOWED_CLIENT_EVENTS: ReadonlySet<string> = new Set<ClientEvent['type']>(
   'investigation.redirectTask',
   'investigation.exportReport',
   'investigation.getReport',
+  'demo.start',
+  'demo.restart',
+  'demo.approve',
+  'demo.deny',
+  'demo.state',
   'synthetic.listScenarios',
   'synthetic.status',
   'synthetic.loadScenario',
@@ -229,6 +234,16 @@ contextBridge.exposeInMainWorld('electronAPI', {
       investigationId: string
     ): Promise<import('../main/investigation/investigation-report-service').InvestigationReport> =>
       invoke({ type: 'investigation.getReport', payload: { investigationId } }),
+  },
+
+  // KIN Demo Mode — deterministic scenario controller (main process)
+  demo: {
+    start: (): Promise<{ investigationId: string }> => invoke({ type: 'demo.start', payload: {} }),
+    restart: (): Promise<{ investigationId: string }> => invoke({ type: 'demo.restart', payload: {} }),
+    approve: (stepId: string): Promise<{ success: boolean }> => invoke({ type: 'demo.approve', payload: { stepId } }),
+    deny: (stepId: string): Promise<{ success: boolean }> => invoke({ type: 'demo.deny', payload: { stepId } }),
+    getState: (): Promise<import('../shared/cyber/demo-types').DemoControllerState> =>
+      invoke({ type: 'demo.state', payload: {} }),
   },
 
   // KIN synthetic demo environment (clearly separated demo mode)

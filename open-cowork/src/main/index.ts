@@ -26,6 +26,7 @@ import { PluginRuntimeService } from './skills/plugin-runtime-service';
 import { MemoryService } from './memory/memory-service';
 import { MemoryExtension } from './memory/memory-extension';
 import { InvestigationService } from './investigation/investigation-service';
+import { DemoScenarioController } from './demo/demo-scenario-controller';
 import { InvestigationContextExtension } from './investigation/investigation-context-extension';
 import { InvestigationGraphExtension } from './investigation/investigation-graph-extension';
 import { InvestigationHypothesisExtension } from './investigation/investigation-hypothesis-extension';
@@ -148,6 +149,7 @@ let pluginRuntimeService: PluginRuntimeService | null = null;
 let memoryService: MemoryService | null = null;
 let scheduledTaskManager: ScheduledTaskManager | null = null;
 let investigationService: InvestigationService | null = null;
+let demoScenarioController: DemoScenarioController | null = null;
 let investigationOrchestrator: RuntimeInvestigationOrchestrator | null = null;
 let syntheticEnvironmentService: SyntheticEnvironmentService | null = null;
 
@@ -1455,6 +1457,7 @@ app
 
     pluginRuntimeService = new PluginRuntimeService(new PluginCatalogService());
     investigationService = new InvestigationService(db, sendToRenderer);
+    demoScenarioController = new DemoScenarioController({ investigationService, sendToRenderer });
     memoryService = new MemoryService(db);
     const cyberCapabilityRegistry = new CyberCapabilityRegistry();
     const extensionManager = new AgentRuntimeExtensionManager([
@@ -1811,6 +1814,7 @@ for (const sig of ['SIGTERM', 'SIGINT'] as const) {
 
 // Handle app quit - before-quit (for macOS Cmd+Q and other quit methods)
 app.on('before-quit', async (event) => {
+  demoScenarioController?.dispose();
   if (!isCleaningUp) {
     // In dev mode, exit quickly — no need for async sandbox cleanup
     if (process.env.VITE_DEV_SERVER_URL) {
@@ -3414,6 +3418,32 @@ async function handleClientEvent(event: ClientEvent): Promise<unknown> {
       sendToRenderer({ type: 'investigation.updated', payload: { investigation } });
       sendToRenderer({ type: 'investigation.list', payload: { investigations: investigationService.list() } });
       return investigation;
+    }
+
+    // KIN Demo Mode — deterministic scenario controller (isolated from live mode).
+    case 'demo.start': {
+      if (!demoScenarioController) throw new Error('Demo mode not initialized');
+      return demoScenarioController.start();
+    }
+
+    case 'demo.restart': {
+      if (!demoScenarioController) throw new Error('Demo mode not initialized');
+      return demoScenarioController.restart();
+    }
+
+    case 'demo.approve': {
+      if (!demoScenarioController) throw new Error('Demo mode not initialized');
+      return demoScenarioController.approve(event.payload.stepId);
+    }
+
+    case 'demo.deny': {
+      if (!demoScenarioController) throw new Error('Demo mode not initialized');
+      return demoScenarioController.deny(event.payload.stepId);
+    }
+
+    case 'demo.state': {
+      if (!demoScenarioController) throw new Error('Demo mode not initialized');
+      return demoScenarioController.snapshot();
     }
 
     case 'investigation.list': {

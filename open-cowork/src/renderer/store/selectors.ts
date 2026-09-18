@@ -19,6 +19,7 @@ import { useAppStore } from './index';
 import type { Session, Message, TraceStep, Settings, AppConfig } from '../types';
 import type { GlobalNotice, SessionExecutionClock, CompactionEvent } from './index';
 import type { Investigation, InvestigationEvent } from '../../shared/cyber/investigation-types';
+import type { DemoControllerState } from '../../shared/cyber/demo-types';
 import type { InvestigationPlan } from '../../main/investigation/parallel-investigation-engine';
 
 // ---------------------------------------------------------------------------
@@ -341,4 +342,9 @@ export function useActiveInvestigationReplan(): InvestigationPlan | null {
 /** Returns the pending replan recommendation for the active investigation. */
 export function useActiveInvestigationRecommendation(): InvestigationEvent | null {
   return useAppStore((s) => s.activeInvestigationRecommendation);
+}
+
+/** Returns the KIN Demo Mode controller state (null when demo never started). */
+export function useDemoState(): DemoControllerState | null {
+  return useAppStore((s) => s.demoState);
 }

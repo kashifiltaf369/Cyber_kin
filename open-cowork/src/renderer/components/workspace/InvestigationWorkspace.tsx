@@ -13,7 +13,11 @@ import {
   useActiveInvestigationId,
   useActiveInvestigationPlan,
   useActiveInvestigationRecommendation,
+  useDemoState,
 } from '../../store/selectors';
+import { DemoControlCard } from '../demo/DemoControlCard';
+import { DemoContextRootPanel } from '../demo/DemoContextRootPanel';
+import { DemoModeIndicator } from '../demo/DemoModeIndicator';
 import { InvestigationsList } from './InvestigationsList';
 import { InvestigationHeader } from './InvestigationHeader';
 import { AITeamPanel } from './AITeamPanel';
@@ -35,6 +39,7 @@ export function InvestigationWorkspace() {
   const plan = useActiveInvestigationPlan();
   const recommendation = useActiveInvestigationRecommendation();
   const activeInvestigationId = useActiveInvestigationId();
+  const demoState = useDemoState();
   const setActiveInvestigation = useAppStore((s) => s.setActiveInvestigation);
   const { send, invoke } = useIPC();
 
@@ -209,6 +214,13 @@ export function InvestigationWorkspace() {
     );
   }
 
+  // KIN Demo Mode: this workspace instance is driven by the deterministic
+  // scenario controller when the active investigation belongs to it.
+  const isDemoScenario =
+    demoState !== null &&
+    demoState.phase !== 'idle' &&
+    demoState.investigationId === investigation.id;
+
   const onPauseTask = (taskId: string) =>
     invoke<{ success: boolean }>({
       type: 'investigation.pauseTask',
@@ -301,6 +313,9 @@ export function InvestigationWorkspace() {
         >
           {investigation.title}
         </span>
+        <div className="ml-auto">
+          <DemoModeIndicator />
+        </div>
       </div>
 
       <InvestigationHeader
@@ -323,7 +338,8 @@ export function InvestigationWorkspace() {
           className="row-span-1 border-r overflow-hidden"
           style={{ borderColor: 'var(--soc-border-subtle)' }}
         >
-          <div className="h-full p-3 grid gap-3" style={{ gridTemplateRows: 'auto minmax(0, 1fr)' }}>
+          <div className="h-full p-3 grid gap-3" style={{ gridTemplateRows: isDemoScenario ? 'auto auto minmax(0, 1fr)' : 'auto minmax(0, 1fr)' }}>
+            {isDemoScenario && demoState && <DemoContextRootPanel demoState={demoState} />}
             <HumanContextPanel
               investigation={investigation}
               onAddNote={(v) => onAddContext('note', v)}
@@ -345,7 +361,8 @@ export function InvestigationWorkspace() {
         </div>
 
         <div className="row-span-1 overflow-hidden">
-          <div className="h-full p-3 grid gap-3" style={{ gridTemplateRows: 'minmax(0, 1.4fr) minmax(0, 1fr)' }}>
+          <div className="h-full p-3 grid gap-3" style={{ gridTemplateRows: isDemoScenario ? 'auto minmax(0, 1.4fr) minmax(0, 1fr)' : 'minmax(0, 1.4fr) minmax(0, 1fr)' }}>
+            {isDemoScenario && demoState && <DemoControlCard demoState={demoState} />}
             <TaskBoard
               investigation={investigation}
               plan={plan}

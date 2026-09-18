@@ -322,6 +322,16 @@ export function useIPC() {
             store.upsertInvestigation(event.payload.investigation);
             break;
 
+          case 'demo.state':
+            // KIN Demo Mode — mirror the deterministic scenario controller's
+            // state snapshot into the store.
+            store.setDemoState(event.payload.state);
+            if (event.payload.state.investigationId) {
+              store.setActiveView('investigations');
+              store.setActiveInvestigation(event.payload.state.investigationId);
+            }
+            break;
+
           case 'investigation.event':
             // Fine-grained mirror of a single investigation event; the
             // authoritative state arrives via investigation.updated payloads,

@@ -9,6 +9,7 @@ import type {
   InvestigationPlan,
   PlannedInvestigationTask,
 } from '../../main/investigation/parallel-investigation-engine';
+import type { DemoControllerState } from '../../shared/cyber/demo-types';
 
 export interface Session {
   id: string;
@@ -510,6 +511,12 @@ export type ClientEvent =
   | { type: 'investigation.redirectTask'; payload: { plannedTaskId: string; description?: string; role?: string } }
   | { type: 'investigation.exportReport'; payload: { investigationId: string } }
   | { type: 'investigation.getReport'; payload: { investigationId: string } }
+  // KIN Demo Mode (deterministic scenario controller in the main process)
+  | { type: 'demo.start'; payload: Record<string, never> }
+  | { type: 'demo.restart'; payload: Record<string, never> }
+  | { type: 'demo.approve'; payload: { stepId: string } }
+  | { type: 'demo.deny'; payload: { stepId: string } }
+  | { type: 'demo.state'; payload: Record<string, never> }
   // KIN synthetic demo environment (clearly separated demo mode)
   | { type: 'synthetic.listScenarios'; payload: Record<string, never> }
   | { type: 'synthetic.status'; payload: Record<string, never> }
@@ -592,7 +599,9 @@ export type ServerEvent =
   | { type: 'investigation.event'; payload: { investigationId: string; event: InvestigationEvent } }
   | { type: 'investigation.plan'; payload: { investigationId: string; plan: InvestigationPlan } }
   | { type: 'investigation.replan'; payload: { investigationId: string; plan: InvestigationPlan } }
-  | { type: 'investigation.replanRecommendation'; payload: { investigationId: string; recommendation: InvestigationEvent | null } };
+  | { type: 'investigation.replanRecommendation'; payload: { investigationId: string; recommendation: InvestigationEvent | null } }
+  // KIN Demo Mode state snapshot (deterministic scenario controller)
+  | { type: 'demo.state'; payload: { state: DemoControllerState } };
 
 // Settings types
 export interface Settings {
